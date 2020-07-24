@@ -13,7 +13,7 @@ If you wish to modify the code, [Visual Studio Community 2019](https://visualstu
 
 # Caveats
 
-Since ZoomController manipulates the Zoom user interface, changes to the Zoom Client for Meetings can cause it to stop working.  For example, if it's looking for a dialog named "Rename User" that gets changed at some point to "Change User Name", ZoomController will not be able to find it.  Some steps have been taken to detect and compensate for these changes, but from time to time you can expect ZoomController to stop working when the Zoom releases an incompatible update.
+Since ZoomController manipulates the Zoom user interface, changes to the Zoom Client for Meetings can cause it to stop working.  For example, if it's looking for a dialog named "Rename User" that gets changed at some point to "Change User Name", ZoomController will not be able to find it.  Some steps have been taken to detect and compensate for these changes, but from time to time you can expect ZoomController to stop working when Zoom releases an incompatible update.
 
 In other words: This is a highly experimental project that should not be used in production.
 
