@@ -9,7 +9,7 @@ Example project includes implementation of a basic bot that recognizes and autom
 
 ZoomController works by controlling the Zoom Client for Meetings on Windows, so a Windows system is required.  The controller hooks into events from the client, sending keystrokes and/or clicks to invoke actions.  As such, it's not the best idea to run ZoomController on a computer system that a human is also trying to use.  To work around that issue, I recommend running ZoomController on a dedicated Windows VM.
 
-If you wish to modify the code, [Visual Studio Community 2019](https://visualstudio.microsoft.com/vs/community/) and the [.NET Framework 4.8](https://devblogs.microsoft.com/dotnet/announcing-the-net-framework-4-8/) SDK is required.
+If you wish to modify the code, [Visual Studio Community 2019](https://visualstudio.microsoft.com/vs/community/) and the [.NET Framework 4.8](https://devblogs.microsoft.com/dotnet/announcing-the-net-framework-4-8/) SDK are required.
 
 # Caveats
 
