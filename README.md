@@ -3,7 +3,9 @@ Programmatic C# interface to control the [Zoom Client for Meetings](https://zoom
 
 Operations include starting/ending meetings, admitting participants in the waiting room, co-hosting/muting/unmuting/renaming participants, sending/receiving public and private chat messages, changing current meeting settings, etc.
 
-Example project includes implementation of a basic bot that recognizes and automatically admits and/or co-hosts known participants, as well as provides basic chat bot functionality.
+Features pluggable chat bot system.
+
+Example project includes implementation of a basic bot that recognizes and automatically admits and/or co-hosts known participants, as well as a chat bot provider that wraps [ChatterBot](https://chatterbot.readthedocs.io/en/stable/).
 
 # Requirements
 
