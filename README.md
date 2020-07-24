@@ -1,0 +1,2 @@
+# ZoomController
+Programmatic C# interface to control the Zoom Client for Meetings on Windows. Operations include starting/ending meetings, joining participants in the waiting room, co-hosting/muting/unmuting/renaming participants, sending/receiving public and private chat messages, changing current meeting settings, etc. Example includes implementation of a basic bot that recognizes and automatically joins and/or co-hosts known participants, as well as provides basic chat bot functionality.
