@@ -7,6 +7,15 @@ Features pluggable chat bot system.
 
 Example project includes implementation of a basic bot that recognizes and automatically admits and/or co-hosts known participants, as well as a chat bot provider that wraps [ChatterBot](https://chatterbot.readthedocs.io/en/stable/).
 
+**Don't bother trying to clone the code just yet!**  I'd hate for someone to clone the code and get frustrated trying to get it to work.  To prevent that, I'm working on an out-of-the-box setup that can be used to start/join a meeting with minimal effort.  I hope to have that done and committed by early October 2020.  Before that, I need to:
+- [ ] Create a sample configuration that's ready to go with minimal tweaking
+- [ ] Do not commit private files/information such as zoom username, password, etc. and other content that is not needed
+- [ ] Make chat bots programatically loadable (Currently they're included in the same project, but I'm not ready to share one of the bots I'm working on just yet)
+- [ ] Move RemedialBot out into it's own DLL
+- [ ] Fix ChatterBot wrapper; I think I broke it recently
+- [ ] Add support for direct Zoom account login (Currently I'm using Google SSO)
+- [ ] Create a Quick Start Guide
+
 # Requirements
 
 ZoomController works by controlling the Zoom Client for Meetings on Windows, so a Windows system is required.  The controller hooks into events from the client, sending keystrokes and/or clicks to invoke actions.  As such, it's not the best idea to run ZoomController on a computer system that a human is also trying to use.  To work around that issue, I recommend running ZoomController on a dedicated Windows VM.
