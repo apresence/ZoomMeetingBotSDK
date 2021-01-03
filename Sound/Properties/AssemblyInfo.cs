@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ZoomController.Interop")]
+[assembly: AssemblyTitle("ZoomMeetingBotSDK.TTS")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("ZoomController.Interop")]
-[assembly: AssemblyCopyright("Copyright ©  2021")]
+[assembly: AssemblyProduct("ZoomMeetingBotSDK.TTS")]
+[assembly: AssemblyCopyright("Copyright ©  2020")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("49f30735-cb2a-46f6-8a58-11a6154cb30d")]
+[assembly: Guid("b8bf3636-96e4-45df-b5ae-bf5ad730b862")]
 
 // Version information for an assembly consists of the following four values:
 //

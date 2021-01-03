@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30011.22
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomController", "ZoomController\ZoomController.csproj", "{D57D6619-6BF5-4FA7-8609-06AF96BCD4D3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UsherBot", "UsherBot\UsherBot.csproj", "{D57D6619-6BF5-4FA7-8609-06AF96BCD4D3}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{54DC3283-4881-47A0-82A8-948A3582A156}"
 	ProjectSection(SolutionItems) = preProject
@@ -12,13 +12,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GmailSenderLib", "GmailSender\GmailSenderLib\GmailSenderLib.csproj", "{340B0E7F-3542-4527-9473-E4A5A31188F1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomController.Bot.ChatterBot", "ZoomController.Bot.ChatterBot\ZoomController.Bot.ChatterBot.csproj", "{CC913E5A-5EE4-4B4A-9A21-CAD10CD658D4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatterBot", "ChatterBot\ZoomMeetingBotSDK.Bot.ChatterBot.csproj", "{CC913E5A-5EE4-4B4A-9A21-CAD10CD658D4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomController.Interop", "ZoomController.Interop\ZoomController.Interop.csproj", "{49F30735-CB2A-46F6-8A58-11A6154CB30D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Interop", "Interop\ZoomMeetingBotSDK.Interop.csproj", "{49F30735-CB2A-46F6-8A58-11A6154CB30D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomController.Sound", "ZoomController.Sound\ZoomController.Sound.csproj", "{B8BF3636-96E4-45DF-B5AE-BF5AD730B862}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sound", "Sound\ZoomMeetingBotSDK.Sound.csproj", "{B8BF3636-96E4-45DF-B5AE-BF5AD730B862}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomController.Utils", "ZoomController.FastRegex\ZoomController.Utils.csproj", "{6E75E9FF-16F0-42B8-BBD8-EE25B9F52E0E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Utils", "Utils\ZoomMeetingBotSDK.Utils.csproj", "{6E75E9FF-16F0-42B8-BBD8-EE25B9F52E0E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -7,7 +7,7 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{D57D6619-6BF5-4FA7-8609-06AF96BCD4D3}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>ZoomController</RootNamespace>
+    <RootNamespace>ZoomMeetingBotSDK</RootNamespace>
     <AssemblyName>UsherBot</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -36,7 +36,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -47,7 +47,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>..\bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -189,17 +189,17 @@
       <Project>{340b0e7f-3542-4527-9473-e4a5a31188f1}</Project>
       <Name>GmailSenderLib</Name>
     </ProjectReference>
-    <ProjectReference Include="..\ZoomController.FastRegex\ZoomController.Utils.csproj">
+    <ProjectReference Include="..\Utils\ZoomMeetingBotSDK.Utils.csproj">
       <Project>{6e75e9ff-16f0-42b8-bbd8-ee25b9f52e0e}</Project>
-      <Name>ZoomController.Utils</Name>
+      <Name>ZoomMeetingBotSDK.Utils</Name>
     </ProjectReference>
-    <ProjectReference Include="..\ZoomController.Interop\ZoomController.Interop.csproj">
+    <ProjectReference Include="..\Interop\ZoomMeetingBotSDK.Interop.csproj">
       <Project>{49f30735-cb2a-46f6-8a58-11a6154cb30d}</Project>
-      <Name>ZoomController.Interop</Name>
+      <Name>ZoomMeetingBotSDK.Interop</Name>
     </ProjectReference>
-    <ProjectReference Include="..\ZoomController.Sound\ZoomController.Sound.csproj">
+    <ProjectReference Include="..\Sound\ZoomMeetingBotSDK.Sound.csproj">
       <Project>{b8bf3636-96e4-45df-b5ae-bf5ad730b862}</Project>
-      <Name>ZoomController.Sound</Name>
+      <Name>ZoomMeetingBotSDK.Sound</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
