@@ -1,26 +1,7 @@
-﻿//using System.Collections.Generic;
+﻿using ZoomController.Interop.HostApp;
 
 namespace ZoomController.Interop.Bot
 {
-    /*
-    public enum LogType
-    {
-        INF = 0,
-        WRN,
-        ERR,
-        CRT,
-        DBG,
-    }
-
-    public interface IHostApp
-    {
-
-        void Log(LogType nLogType, string sMessage, params object[] values);
-        string repr(object o);
-        object GetSetting(string key);
-    }
-    */
-
     public enum Gender
     {
         Neutral = 0,
@@ -30,7 +11,7 @@ namespace ZoomController.Interop.Bot
 
     public class ChatBotInitParam
     {
-        //public IHostApp hostApp;
+        public IHostApp hostApp;
     }
 
     public class ChatBotInfo

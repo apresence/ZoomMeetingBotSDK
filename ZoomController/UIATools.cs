@@ -5,6 +5,8 @@
     using System.Text;
     using System.Windows.Automation;
     using System.Windows.Forms;
+    using global::ZoomController.Interop.HostApp;
+    using global::ZoomController.Utils;
 
     internal class UIATools
     {
@@ -125,7 +127,7 @@
 
         public static void LogSupportedPatterns(AutomationElement ae)
         {
-            Global.Log(Global.LogType.DBG, "Supported patterns for {0} {1}:", Global.repr(ae.Current.LocalizedControlType), Global.repr(ae.Current.Name));
+            Global.hostApp.Log(LogType.DBG, "Supported patterns for {0} {1}:", Global.repr(ae.Current.LocalizedControlType), Global.repr(ae.Current.Name));
 
             List<string> l = new List<string>();
 
@@ -134,16 +136,16 @@
             {
                 l.Add(ap.ProgrammaticName);
             }
-            Global.Log(Global.LogType.DBG, "  {0}", l.Count == 0 ? "None" : string.Join(",", l));
+            Global.hostApp.Log(LogType.DBG, "  {0}", l.Count == 0 ? "None" : string.Join(",", l));
         }
 
         public static void LogSiblings(AutomationElement ae)
         {
-            Global.Log(Global.LogType.DBG, "Siblings:");
+            Global.hostApp.Log(LogType.DBG, "Siblings:");
             var nodeAttendee = TreeWalker.ContentViewWalker.GetNextSibling(ae);
             while (nodeAttendee != null)
             {
-                Global.Log(Global.LogType.DBG, "  {0}", Global.GetObjStrs(nodeAttendee.Current));
+                Global.hostApp.Log(LogType.DBG, "  {0}", ZCUtils.GetObjStrs(nodeAttendee.Current));
                 LogSupportedPatterns(nodeAttendee);
                 nodeAttendee = TreeWalker.RawViewWalker.GetNextSibling(nodeAttendee);
             }
@@ -151,11 +153,11 @@
 
         public static void LogChildren(AutomationElement ae)
         {
-            Global.Log(Global.LogType.DBG, "Children:");
+            Global.hostApp.Log(LogType.DBG, "Children:");
             var nodeAttendee = TreeWalker.ContentViewWalker.GetFirstChild(ae);
             while (nodeAttendee != null)
             {
-                Global.Log(Global.LogType.DBG, "  {0}", Global.GetObjStrs(nodeAttendee.Current));
+                Global.hostApp.Log(LogType.DBG, "  {0}", ZCUtils.GetObjStrs(nodeAttendee.Current));
                 LogSupportedPatterns(nodeAttendee);
                 nodeAttendee = TreeWalker.RawViewWalker.GetNextSibling(nodeAttendee);
             }

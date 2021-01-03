@@ -1,13 +1,11 @@
-﻿using global::ZoomController.Interop.Bot;
+﻿using System;
+using System.Diagnostics;
+using ZoomController.Utils;
+using ZoomController.Interop.HostApp;
+using ZoomController.Interop.Bot;
 
 namespace ZoomController.Bot
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Diagnostics;
-    using System.Net.Http;
-    using System.Text.RegularExpressions;
-
     namespace ChatterBot
     {
         /// <summary>
@@ -22,19 +20,22 @@ namespace ZoomController.Bot
                 IntelligenceLevel = 100,
             };
 
+            private IHostApp hostApp;
             private Process p = null;
             private bool bStarted = false;
 
             /// <summary>Starts up ChatBot and prepares it to converse.</summary>
             void IChatBot.Start(ChatBotInitParam param)
             {
+                hostApp = param.hostApp;
+
                 if (bStarted)
                 {
-                    Global.Log(Global.LogType.WRN, "chatBot already started");
+                    hostApp.Log(LogType.WRN, "chatBot already started");
                     return;
                 }
 
-                Global.Log(Global.LogType.DBG, "chatBot starting");
+                hostApp.Log(LogType.DBG, "chatBot starting");
 
                 try
                 {
@@ -56,7 +57,7 @@ namespace ZoomController.Bot
                     {
                         if (line == "Chatbot started")
                         {
-                            Global.Log(Global.LogType.INF, "chatBot started");
+                            hostApp.Log(LogType.INF, "chatBot started");
                             bStarted = true;
                             return;
                         }
@@ -64,7 +65,7 @@ namespace ZoomController.Bot
                 }
                 catch (Exception ex)
                 {
-                    Global.Log(Global.LogType.ERR, "chatBot failed to start: {0}", Global.repr(ex.ToString()));
+                    hostApp.Log(LogType.ERR, "chatBot failed to start: {0}", ZCUtils.repr(ex.ToString()));
                 }
             }
 
@@ -72,7 +73,7 @@ namespace ZoomController.Bot
             {
                 if ((!bStarted) && (p == null))
                 {
-                    Global.Log(Global.LogType.WRN, "chatBot is not started");
+                    hostApp.Log(LogType.WRN, "chatBot is not started");
                     return;
                 }
 
@@ -80,7 +81,7 @@ namespace ZoomController.Bot
                 {
                     if (bStarted)
                     {
-                        Global.Log(Global.LogType.DBG, "chatBot stopping");
+                        hostApp.Log(LogType.DBG, "chatBot stopping");
                         p.StandardInput.WriteLine("quit");
                         if (p.WaitForExit(2000))
                         {
@@ -90,7 +91,7 @@ namespace ZoomController.Bot
                 }
                 catch (Exception ex)
                 {
-                    Global.Log(Global.LogType.DBG, "chatBot exception {0}", ex.ToString());
+                    hostApp.Log(LogType.DBG, "chatBot exception {0}", ex.ToString());
                 }
                 finally
                 {
@@ -98,18 +99,18 @@ namespace ZoomController.Bot
                     {
                         try
                         {
-                            Global.Log(Global.LogType.DBG, "chatBot killing");
+                            hostApp.Log(LogType.DBG, "chatBot killing");
                             p.Kill();
                         }
                         catch (Exception ex)
                         {
-                            Global.Log(Global.LogType.WRN, "chatBot exception during kill: {0}", ex.ToString());
+                            hostApp.Log(LogType.WRN, "chatBot exception during kill: {0}", ex.ToString());
                         }
                         p = null;
                     }
                     bStarted = false;
                 }
-                Global.Log(Global.LogType.INF, "chatBot stopped");
+                hostApp.Log(LogType.INF, "chatBot stopped");
             }
 
             /// <summary>
@@ -123,12 +124,12 @@ namespace ZoomController.Bot
                     return null;
                 }
 
-                Global.Log(Global.LogType.DBG, "chatBot > {0}", Global.repr(input));
+                hostApp.Log(LogType.DBG, "chatBot > {0}", ZCUtils.repr(input));
                 p.StandardInput.WriteLine(input);
 
                 // TBD: Implement some sort of timeout or something so we don't hang forever if things go wonky
                 string line = p.StandardOutput.ReadLine();
-                Global.Log(Global.LogType.DBG, "chatBot < {0}", Global.repr(line));
+                hostApp.Log(LogType.DBG, "chatBot < {0}", ZCUtils.repr(line));
 
                 return line;
             }

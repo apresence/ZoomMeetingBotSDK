@@ -1,10 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace ZoomController
 {
@@ -16,9 +12,8 @@ namespace ZoomController
     public class ProtectedString
     {
         private static int ENTROPY_LEN = 20;
-        private static DataProtectionScope DATA_PROTECTION_SCOPE = DataProtectionScope.LocalMachine;
 
-        public static string Protect(string value)
+        public static string Protect(string value, DataProtectionScope scope = DataProtectionScope.LocalMachine)
         {
             // Generate ENTROPY_LEN bytes of random data
             byte[] entropy = new byte[ENTROPY_LEN];
@@ -31,7 +26,7 @@ namespace ZoomController
             byte[] valueBytes = Encoding.UTF8.GetBytes(value);
 
             // Protect the string value bytes, mixing in the random entropy
-            byte[] valueEncryptedBytes = ProtectedData.Protect(valueBytes, entropy, DATA_PROTECTION_SCOPE);
+            byte[] valueEncryptedBytes = ProtectedData.Protect(valueBytes, entropy, scope);
 
             // Save the random entropy and protected value bytes in a single byte array
             byte[] protectedData = new byte[entropy.Length + valueEncryptedBytes.Length];
@@ -50,7 +45,7 @@ namespace ZoomController
             return ret;
         }
 
-        public static string Unprotect(string value)
+        public static string Unprotect(string value, DataProtectionScope scope = DataProtectionScope.LocalMachine)
         {
             // Convert Base64 string to byte array
             byte[] protectedData = Convert.FromBase64String(value);
@@ -62,7 +57,7 @@ namespace ZoomController
             Buffer.BlockCopy(protectedData, ENTROPY_LEN, valueEncryptedBytes, 0, valueEncryptedBytes.Length);
 
             // Unprotect the string value bytes
-            byte[] valueBytes = ProtectedData.Unprotect(valueEncryptedBytes, entropy, DATA_PROTECTION_SCOPE);
+            byte[] valueBytes = ProtectedData.Unprotect(valueEncryptedBytes, entropy, scope);
 
             // Convert unprotected bytes to UTF8 string
             string ret = Encoding.UTF8.GetString(valueBytes);

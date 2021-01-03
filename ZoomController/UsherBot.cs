@@ -1,16 +1,17 @@
-﻿using global::ZoomController.Interop.Bot;
-
-namespace ZoomController
+﻿namespace ZoomController
 {
     using System;
     using System.Collections.Generic;
     using System.Diagnostics.CodeAnalysis;
     using System.Drawing.Imaging;
     using System.IO;
-    using System.Text.RegularExpressions;
-    using System.Threading;
     using System.Linq;
     using System.Reflection;
+    using System.Text.RegularExpressions;
+    using System.Threading;
+    using global::ZoomController.Interop.Bot;
+    using global::ZoomController.Interop.HostApp;
+    using global::ZoomController.Utils;
 
     internal class UsherBot
     {
@@ -57,7 +58,8 @@ namespace ZoomController
                 {
                     Global.cfg.BotAutomationFlags |= Global.BotAutomationFlag.AdmitOthers;
                 }
-                Global.Log(Global.LogType.INF, "Citadel mode {0}", bNewState ? "on" : "off");
+
+                Global.hostApp.Log(LogType.INF, "Citadel mode {0}", bNewState ? "on" : "off");
                 return true;
             }
 
@@ -79,7 +81,7 @@ namespace ZoomController
                 {
                     Global.cfg.BotAutomationFlags |= botLockdownFlags;
                 }
-                Global.Log(Global.LogType.INF, "Lockdown mode {0}", bNewState ? "on" : "off");
+                Global.hostApp.Log(LogType.INF, "Lockdown mode {0}", bNewState ? "on" : "off");
                 return true;
             }
             if (sName == "debug")
@@ -90,7 +92,7 @@ namespace ZoomController
                 }
 
                 Global.cfg.DebugLoggingEnabled = bNewState;
-                Global.Log(Global.LogType.INF, "Debug mode {0}", Global.cfg.DebugLoggingEnabled ? "on" : "off");
+                Global.hostApp.Log(LogType.INF, "Debug mode {0}", Global.cfg.DebugLoggingEnabled ? "on" : "off");
                 return true;
             }
             if (sName == "pause")
@@ -101,7 +103,7 @@ namespace ZoomController
                 }
 
                 Global.cfg.IsPaused = bNewState;
-                Global.Log(Global.LogType.INF, "Pause mode {0}", Global.cfg.IsPaused ? "on" : "off");
+                Global.hostApp.Log(LogType.INF, "Pause mode {0}", Global.cfg.IsPaused ? "on" : "off");
                 return true;
             }
             if (sName == "passive")
@@ -113,7 +115,7 @@ namespace ZoomController
                 }
 
                 Global.cfg.BotAutomationFlags = bPassive ? Global.BotAutomationFlag.None : Global.BotAutomationFlag.All;
-                Global.Log(Global.LogType.INF, "Passive mode {0}", bPassive ? "on" : "off");
+                Global.hostApp.Log(LogType.INF, "Passive mode {0}", bPassive ? "on" : "off");
                 return true;
             }
             throw new Exception(string.Format("Unknown mode: {0}", sName));
@@ -210,11 +212,11 @@ namespace ZoomController
                     // TBD: Throttle ReclaimHost attempts?
                     if (ZoomController.me.role == ZoomController.ParticipantRole.CoHost)
                     {
-                        Global.Log(Global.LogType.WRN, "BOT I'm Co-Host instead of Host; Trying to reclaim host");
+                        Global.hostApp.Log(LogType.WRN, "BOT I'm Co-Host instead of Host; Trying to reclaim host");
                     }
                     else if (ZoomController.me.role == ZoomController.ParticipantRole.None)
                     {
-                        Global.Log(Global.LogType.WRN, "BOT I'm not Host or Co-Host; Trying to reclaim host");
+                        Global.hostApp.Log(LogType.WRN, "BOT I'm not Host or Co-Host; Trying to reclaim host");
                     }
                     ZoomController.ReclaimHost();
                 }
@@ -222,14 +224,14 @@ namespace ZoomController
                 if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.RenameMyself) != 0) && (ZoomController.me.name != Global.cfg.MyParticipantName))
                 {
                     // Rename myself.  Event handler will type in the name when the dialog pops up
-                    Global.Log(Global.LogType.INF, "BOT Renaming myself from {0} to {1}", Global.repr(ZoomController.me.name), Global.repr(Global.cfg.MyParticipantName));
+                    Global.hostApp.Log(LogType.INF, "BOT Renaming myself from {0} to {1}", Global.repr(ZoomController.me.name), Global.repr(Global.cfg.MyParticipantName));
                     ZoomController.RenameParticipant(ZoomController.me, Global.cfg.MyParticipantName);
                 }
 
                 if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.UnmuteMyself) != 0) && (ZoomController.me.audioStatus == ZoomController.ParticipantAudioStatus.Muted))
                 {
                     // Unmute myself
-                    Global.Log(Global.LogType.INF, "BOT Unmuting myself");
+                    Global.hostApp.Log(LogType.INF, "BOT Unmuting myself");
                     ZoomController.UnmuteParticipant(ZoomController.me);
                 }
 
@@ -264,7 +266,7 @@ namespace ZoomController
                     {
                         if (bAdmitKnown)
                         {
-                            Global.Log(Global.LogType.INF, "BOT Admitting {0} : KNOWN", Global.repr(p.name));
+                            Global.hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", Global.repr(p.name));
                             if (ZoomController.AdmitParticipant(p))
                             {
                                 //SendTopic(p.name, false);
@@ -293,7 +295,7 @@ namespace ZoomController
                     // Make sure we don't display the message more than once
                     if (!HsParticipantMessages.Contains(sMsg))
                     {
-                        Global.Log(Global.LogType.INF, sMsg);
+                        Global.hostApp.Log(LogType.INF, sMsg);
                         HsParticipantMessages.Add(sMsg);
                     }
 
@@ -321,7 +323,7 @@ namespace ZoomController
                         if (GoodUsers.TryGetValue(sCleanName, out bool bCoHost) && bCoHost)
                         {
                             // Yep, they should be, so do the promotion
-                            Global.Log(Global.LogType.INF, "BOT Promoting {0} to Co-host", Global.repr(p.name));
+                            Global.hostApp.Log(LogType.INF, "BOT Promoting {0} to Co-host", Global.repr(p.name));
                             ZoomController.PromoteParticipant(p);
                         }
                     }
@@ -398,13 +400,13 @@ namespace ZoomController
 
             if (!Monitor.TryEnter(_lock_eh))
             {
-                Global.Log(Global.LogType.WRN, "TimerIdleHandler {0:X4} - Busy; Will try again later", nTimerIterationID);
+                Global.hostApp.Log(LogType.WRN, "TimerIdleHandler {0:X4} - Busy; Will try again later", nTimerIterationID);
                 return;
             }
 
             try
             {
-                //Global.Log(Global.LogType.DBG, "TimerIdleHandler {0:X4} - Enter");
+                //Global.hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - Enter");
 
                 Global.LoadSettings();
                 LoadGoodUsers();
@@ -418,24 +420,24 @@ namespace ZoomController
                     return;
                 }
 
-                //Global.Log(Global.LogType.DBG, "TimerIdleHandler {0:X4} - DoParticipantActions", nTimerIterationID);
+                //Global.hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - DoParticipantActions", nTimerIterationID);
                 DoParticipantActions();
 
-                //Global.Log(Global.LogType.DBG, "TimerIdleHandler {0:X4} - DoChatActions", nTimerIterationID);
+                //Global.hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - DoChatActions", nTimerIterationID);
                 DoChatActions();
             }
             catch (ZoomController.ZoomClosedException ex)
             {
-                Global.Log(Global.LogType.INF, ex.ToString());
+                Global.hostApp.Log(LogType.INF, ex.ToString());
                 ShouldExit = true;
             }
             catch (Exception ex)
             {
-                Global.Log(Global.LogType.ERR, "TimerIdleHandler {0:X4} - Unhandled Exception: {1}", nTimerIterationID, ex.ToString());
+                Global.hostApp.Log(LogType.ERR, "TimerIdleHandler {0:X4} - Unhandled Exception: {1}", nTimerIterationID, ex.ToString());
             }
             finally
             {
-                //Global.Log(Global.LogType.DBG, "TimerIdleHandler {0:X4} - Exit", nTimerIterationID);
+                //Global.hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - Exit", nTimerIterationID);
                 Monitor.Exit(_lock_eh);
             }
         }
@@ -453,7 +455,7 @@ namespace ZoomController
                 return;
             }
 
-            Global.Log(Global.LogType.INF, "Processing Remote Commands");
+            Global.hostApp.Log(LogType.INF, "Processing Remote Commands");
 
             using (StreamReader sr = File.OpenText(sPath))
             {
@@ -487,18 +489,18 @@ namespace ZoomController
                     }
                     else if (line == "exit")
                     {
-                        Global.Log(Global.LogType.INF, "Received {0} command", line);
+                        Global.hostApp.Log(LogType.INF, "Received {0} command", line);
                         ZoomController.LeaveMeeting(false);
                         ShouldExit = true;
                     }
                     else if (line == "kill")
                     {
-                        Global.Log(Global.LogType.INF, "Received {0} command", line);
+                        Global.hostApp.Log(LogType.INF, "Received {0} command", line);
                         ZoomController.LeaveMeeting(true);
                     }
                     else
                     {
-                        Global.Log(Global.LogType.ERR, "Unknown command: {0}", line);
+                        Global.hostApp.Log(LogType.ERR, "Unknown command: {0}", line);
                     }
                 }
             }
@@ -531,7 +533,7 @@ namespace ZoomController
 
             dtLastGoodUserMod = dtLastMod;
 
-            Global.Log(Global.LogType.INF, "(Re-)loading GoodUsers");
+            Global.hostApp.Log(LogType.INF, "(Re-)loading GoodUsers");
 
             GoodUsers.Clear();
             using (StreamReader sr = File.OpenText(sPath))
@@ -580,13 +582,13 @@ namespace ZoomController
 
         private static void OnMeetingOptionStateChange(object sender, ZoomController.MeetingOptionStateChangeEventArgs e)
         {
-            Global.Log(Global.LogType.INF, "Meeting option {0} changed to {1}", Global.repr(e.optionName), e.newState.ToString());
+            Global.hostApp.Log(LogType.INF, "Meeting option {0} changed to {1}", Global.repr(e.optionName), e.newState.ToString());
         }
 
         private static void OnParticipantAttendanceStatusChange(object sender, ZoomController.ParticipantEventArgs e)
         {
             ZoomController.Participant p = e.participant;
-            Global.Log(Global.LogType.INF, "Participant {0} status {1}", Global.repr(p.name), p.status.ToString());
+            Global.hostApp.Log(LogType.INF, "Participant {0} status {1}", Global.repr(p.name), p.status.ToString());
 
             // TBD: Could immediately admit recognized attendees
         }
@@ -670,7 +672,7 @@ namespace ZoomController
 
         private static string SmallTalk(string text)
         {
-            foreach (var word in Global.GetWordsInSentence(text))
+            foreach (var word in text.GetWordsInSentence())
             {
                 if (Global.cfg.SmallTalkSequences.TryGetValue(word.ToLower(), out string response))
                 {
@@ -683,7 +685,7 @@ namespace ZoomController
 
         private static string RandomTalk(string text)
         {
-            return Global.GetRandomStringFromArray(Global.cfg.RandomTalk);
+            return Global.cfg.RandomTalk.RandomElement<string>();
         }
 
         private static string OneTimeHi(string text, string to)
@@ -697,7 +699,7 @@ namespace ZoomController
             }
 
             // Try to give a specific response
-            foreach (var word in Global.GetWordsInSentence(text))
+            foreach (var word in text.GetWordsInSentence())
             {
                 if (Global.cfg.OneTimeHiSequences.TryGetValue(word.ToLower(), out response))
                 {
@@ -802,7 +804,7 @@ namespace ZoomController
 
         private static void OnChatMessageReceive(object source, ZoomController.ChatEventArgs e)
         {
-            Global.Log(Global.LogType.INF, "New message from {0} to {1}: {2}", Global.repr(e.from), Global.repr(e.to), Global.repr(e.text));
+            Global.hostApp.Log(LogType.INF, "New message from {0} to {1}: {2}", Global.repr(e.from), Global.repr(e.to), Global.repr(e.text));
 
             string sTo = e.to;
             string sFrom = e.from;
@@ -906,7 +908,7 @@ namespace ZoomController
                             break;
                         }
 
-                        Global.Log(Global.LogType.WRN, $"Bot converse with {Global.repr(chatBot.GetChatBotInfo().Name)} failed: {Global.repr(failureMsg)}");
+                        Global.hostApp.Log(LogType.WRN, $"Bot converse with {Global.repr(chatBot.GetChatBotInfo().Name)} failed: {Global.repr(failureMsg)}");
                     }
                 }
 
@@ -946,13 +948,13 @@ namespace ZoomController
             // Only allow admin users to run the following commands
             if (!bAdmin)
             {
-                Global.Log(Global.LogType.WRN, "Ignoring command {0} from non-admin {1}", Global.repr(sMsg), Global.repr(sFrom));
+                Global.hostApp.Log(LogType.WRN, "Ignoring command {0} from non-admin {1}", Global.repr(sMsg), Global.repr(sFrom));
                 return;
             }
 
             if (!ZoomController.participants.TryGetValue(sFrom, out ZoomController.Participant sender))
             {
-                Global.Log(Global.LogType.ERR, "Received command {0} from {1}, but I don't have a Participant class for them", Global.repr(sMsg), Global.repr(e.from));
+                Global.hostApp.Log(LogType.ERR, "Received command {0} from {1}, but I don't have a Participant class for them", Global.repr(sMsg), Global.repr(e.from));
                 return;
             }
 
@@ -1309,6 +1311,9 @@ namespace ZoomController
         /// Searches for ChatBot plugins under plugins\Bot\{BotName}\ZoomController.Bot.{BotName}.dll and tries to instantiate them,
         /// returning a list of ones that succeeded.  The list is ordered by intelligence level, with the most intelligent bot listed
         /// first.
+        ///
+        /// NOTE: We put the plugins in their own directories to allow them to use whatever .Net verison and dependency libraries they'd
+        /// like without confliciting with those used by the main process.
         /// </summary>
         public static List<IChatBot> GetChatBots()
         {
@@ -1319,18 +1324,18 @@ namespace ZoomController
                 FileInfo[] files = subdir.GetFiles("ZoomController.Bot.*.dll");
                 if (files.Length > 1)
                 {
-                    Global.Log(Global.LogType.WRN, $"Cannot load bot in {Global.repr(subdir.FullName)}; More than one DLL found");
+                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {Global.repr(subdir.FullName)}; More than one DLL found");
                 }
                 else if (files.Length == 0)
                 {
-                    Global.Log(Global.LogType.WRN, $"Cannot load bot in {Global.repr(subdir.FullName)}; No DLL found");
+                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {Global.repr(subdir.FullName)}; No DLL found");
                 }
                 else
                 {
                     var file = files[0];
                     try
                     {
-                        Global.Log(Global.LogType.DBG, $"Loading {file.Name}");
+                        Global.hostApp.Log(LogType.DBG, $"Loading {file.Name}");
                         var assembly = Assembly.LoadFile(file.FullName);
                         var types = assembly.GetTypes();
                         foreach (var type in types)
@@ -1340,15 +1345,18 @@ namespace ZoomController
                             {
                                 var chatBot = Activator.CreateInstance(type) as IChatBot;
                                 var chatBotInfo = chatBot.GetChatBotInfo();
-                                chatBot.Start(new ChatBotInitParam());
-                                Global.Log(Global.LogType.DBG, $"Loaded {Global.repr(chatBotInfo.Name)} chatbot with intelligence level {chatBotInfo.IntelligenceLevel}");
+                                chatBot.Start(new ChatBotInitParam()
+                                {
+                                    hostApp = Global.hostApp,
+                                });
+                                Global.hostApp.Log(LogType.DBG, $"Loaded {Global.repr(chatBotInfo.Name)} chatbot with intelligence level {chatBotInfo.IntelligenceLevel}");
                                 bots.Add(new Tuple<int, IChatBot>(chatBotInfo.IntelligenceLevel, chatBot));
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Global.Log(Global.LogType.ERR, $"Failed to load {Global.repr(file.FullName)}: {Global.repr(ex)}");
+                        Global.hostApp.Log(LogType.ERR, $"Failed to load {Global.repr(file.FullName)}: {Global.repr(ex)}");
                     }
                 }
             }
@@ -1382,11 +1390,11 @@ namespace ZoomController
             {
                 if (ZoomController.me.role != ZoomController.ParticipantRole.Host)
                 {
-                    Global.Log(Global.LogType.DBG, "BOT LeaveMeeting - I am not host");
+                    Global.hostApp.Log(LogType.DBG, "BOT LeaveMeeting - I am not host");
                 }
                 else
                 {
-                    Global.Log(Global.LogType.DBG, "BOT LeaveMeeting - I am host; Trying to find someone to pass it to");
+                    Global.hostApp.Log(LogType.DBG, "BOT LeaveMeeting - I am host; Trying to find someone to pass it to");
 
                     ZoomController.Participant altHost = null;
                     foreach (ZoomController.Participant p in ZoomController.participants.Values)
@@ -1400,27 +1408,27 @@ namespace ZoomController
 
                     if (altHost == null)
                     {
-                        Global.Log(Global.LogType.ERR, "BOT LeaveMeeting - Could not find an alternative host; Ending meeting");
+                        Global.hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Could not find an alternative host; Ending meeting");
                         endForAll = true;
                     }
                     else
                     {
                         try
                         {
-                            Global.Log(Global.LogType.INF, "BOT LeaveMeeting - Passing Host to {0}", Global.repr(altHost.name));
+                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passing Host to {0}", Global.repr(altHost.name));
                             ZoomController.PromoteParticipant(altHost, ZoomController.ParticipantRole.Host);
-                            Global.Log(Global.LogType.INF, "BOT LeaveMeeting - Passed Host to {0}", Global.repr(altHost.name));
+                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passed Host to {0}", Global.repr(altHost.name));
                         }
                         catch (Exception ex)
                         {
-                            Global.Log(Global.LogType.ERR, "BOT LeaveMeeting - Failed to pass Host to {0}; Ending meeting", Global.repr(altHost.name));
+                            Global.hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Failed to pass Host to {0}; Ending meeting", Global.repr(altHost.name));
                             endForAll = true;
                         }
                     }
                 }
             }
 
-            Global.Log(Global.LogType.INF, "BOT LeaveMeeting - Leaving Meeting");
+            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Leaving Meeting");
             ZoomController.LeaveMeeting(endForAll);
         }
 
@@ -1444,14 +1452,14 @@ namespace ZoomController
                     gmailSender = new GmailSenderLib.GmailSender(System.Reflection.Assembly.GetCallingAssembly().GetName().Name);
                 }
 
-                Global.Log(Global.LogType.ERR, "SendEmail - Sending email to {0} with subject {1}", Global.repr(to), Global.repr(subject));
+                Global.hostApp.Log(LogType.ERR, "SendEmail - Sending email to {0} with subject {1}", Global.repr(to), Global.repr(subject));
                 gmailSender.Send(new GmailSenderLib.SimpleMailMessage(subject, body, to));
 
                 return true;
             }
             catch (Exception ex)
             {
-                Global.Log(Global.LogType.ERR, "SendEmail - Failed; Exception: {0}", Global.repr(ex.ToString()));
+                Global.hostApp.Log(LogType.ERR, "SendEmail - Failed; Exception: {0}", Global.repr(ex.ToString()));
                 return false;
             }
         }

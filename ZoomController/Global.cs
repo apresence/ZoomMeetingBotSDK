@@ -9,19 +9,14 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
+using ZoomController.Interop.HostApp;
+using ZoomController.Utils;
 
 namespace ZoomController
 {
     public class Global
     {
-        public enum LogType
-        {
-            INF = 0,
-            WRN,
-            ERR,
-            CRT,
-            DBG,
-        }
+        static public IHostApp hostApp = null;
 
         [Flags]
         public enum BotAutomationFlag
@@ -278,53 +273,6 @@ namespace ZoomController
 
         public static ConfigurationSettings cfg = new ConfigurationSettings();
 
-        // TBD: Move these into kvp dict?
-        private static readonly object _lock_log = new object();
-
-        public static void Log(LogType nLogType, string sMessage, params object[] values)
-        {
-            string s = string.Format(
-                    "{0} {1} {2}",
-                    DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"),
-                    nLogType.ToString(),
-                    string.Format(sMessage, values));
-            string n = "UsherBot.Log";
-
-            lock (_lock_log)
-            {
-                if ((nLogType != Global.LogType.DBG) || cfg.DebugLoggingEnabled)
-                {
-                    Console.WriteLine(s);
-                }
-
-                StreamWriter sw = null;
-                for (int attempt = 0; attempt < 3; attempt++)
-                {
-                    try
-                    {
-                        sw = File.Exists(n) ? File.AppendText(n) : File.CreateText(n);
-                    }
-                    catch (IOException ex)
-                    {
-                        Global.Log(Global.LogType.WRN, "Failed to write log file; Trying again in 1s (Attempt #{0}); Exception: {1}", attempt, Global.repr(ex.ToString()));
-                        Thread.Sleep(1000);
-
-                        continue;
-                    }
-
-                    break;
-                }
-
-                if (sw == null)
-                {
-                    Global.Log(Global.LogType.ERR, "Max attempts trying to write to log file; Giving up");
-                    return;
-                }
-
-                sw.WriteLine(s);
-                sw.Close();
-            }
-        }
         public static T DeserializeJson<T>(string json)
         {
             return JsonSerializer.Deserialize<T>(json);
@@ -342,132 +290,6 @@ namespace ZoomController
             {
                 throw new FormatException(string.Format("Could not serialize object {0}", o.GetType().Name), ex);
             }
-        }
-
-        private static readonly HashSet<string> SkipPropertyNames = new HashSet<string> { "ControlType", "ProcessId", "Orientation" };
-
-        public static string GetObjStrs(object o)
-        {
-            List<string> l = new List<string>();
-            foreach (var prop in o.GetType().GetProperties())
-            {
-                if (SkipPropertyNames.Contains(prop.Name))
-                {
-                    continue;
-                }
-
-                var val = prop.GetValue(o, null);
-                if (val == null)
-                {
-                    continue;
-                }
-
-                if ((val is string s) && (s.Length == 0))
-                {
-                    continue;
-                }
-
-                if ((val is bool b) && (b == false))
-                {
-                    continue;
-                }
-
-                if ((val is int i) && (i == 0))
-                {
-                    continue;
-                }
-
-                l.Add(string.Format("{0}:{1}", Global.repr(prop.Name), Global.repr(val)));
-            }
-            return string.Join(",", l);
-        }
-
-        public static string GetObjHash(object o)
-        {
-            MD5 hash = MD5.Create();
-            StringBuilder sb = new StringBuilder();
-            byte[] data = hash.ComputeHash(Encoding.UTF8.GetBytes(Global.GetObjStrs(o)));
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                sb.Append(data[i].ToString("x2"));
-            }
-
-            return sb.ToString();
-        }
-
-        public static string RepeatString(string s, int count)
-        {
-            return new StringBuilder().Insert(0, s, count).ToString();
-        }
-
-        public static string GetFirstRegExGroupMatch(Regex re, string text, string default_value = null)
-        {
-            try
-            {
-                MatchCollection matches = re.Matches(text);
-                GroupCollection groups = matches[0].Groups;
-                return groups[1].Value;
-            }
-            catch
-            {
-                return default_value;
-            }
-        }
-
-        public static void ExpandDictionaryPipes(Dictionary<string, string> dic)
-        {
-            string[] keys = new string[dic.Count];
-            dic.Keys.CopyTo(keys, 0);
-
-            foreach (string key in keys)
-            {
-                var a = key.Split('|');
-
-                // If this key doesn't have any pipes, we can skip it
-                if (a.Length == 1)
-                {
-                    continue;
-                }
-
-                var val = dic[key];
-                dic.Remove(key);
-                foreach (var subkey in a)
-                {
-                    // Skip blank keys
-                    var cleanSubkey = subkey.Trim();
-                    if (cleanSubkey.Length == 0)
-                    {
-                        continue;
-                    }
-
-                    dic.Add(subkey, val);
-                }
-            }
-        }
-
-        private static readonly Random _GetRandomIndex_rand = new Random();
-        /// <summary>
-        /// Returns a random value from the given Dictionary object.
-        /// </summary>
-        public static TValue GetRandomDictionaryValue<TKey, TValue>(IDictionary<TKey, TValue> dic)
-        {
-            return dic.ElementAt(_GetRandomIndex_rand.Next(0, dic.Count - 1)).Value;
-        }
-
-        public static string GetRandomStringFromArray(string[] ary)
-        {
-            return ary.ElementAt(_GetRandomIndex_rand.Next(0, ary.Length - 1));
-        }
-
-        /// <summary>
-        /// Splits up a given sentence into words and returns them.  Adapted from: https://stackoverflow.com/a/16734675.
-        /// </summary>
-        /// <param name="text">The sentence to parse.</param>
-        /// <returns>A string[] of words extracted from the given sentence.</returns>
-        public static string[] GetWordsInSentence(string text)
-        {
-            return text.Split().Select(x => x.Trim(text.Where(char.IsPunctuation).Distinct().ToArray())).ToArray();
         }
 
         private static DateTime dtLastSettingsMod = DateTime.MinValue;
@@ -492,54 +314,23 @@ namespace ZoomController
 
             dtLastSettingsMod = dtLastMod;
 
-            Global.Log(Global.LogType.INF, "(Re-)loading settings.json");
+            hostApp.Log(LogType.INF, "(Re-)loading settings.json");
 
             cfg = JsonSerializer.Deserialize<ConfigurationSettings>(File.ReadAllText(@"settings.json"));
 
-            ExpandDictionaryPipes(cfg.BroadcastCommands);
-            ExpandDictionaryPipes(cfg.OneTimeHiSequences);
-            ExpandDictionaryPipes(cfg.SmallTalkSequences);
+            ZCUtils.ExpandDictionaryPipes(cfg.BroadcastCommands);
+            ZCUtils.ExpandDictionaryPipes(cfg.OneTimeHiSequences);
+            ZCUtils.ExpandDictionaryPipes(cfg.SmallTalkSequences);
         }
 
         public static void SaveSettings()
         {
-            Global.Log(Global.LogType.INF, "Saving settings.json");
+            hostApp.Log(LogType.INF, "Saving settings.json");
             var options = new JsonSerializerOptions
             {
                 WriteIndented = true,
             };
             File.WriteAllText(@"settings.json", JsonSerializer.Serialize(cfg, options));
-        }
-
-        public static char[] CRLFDelim = new char[] { '\r', '\n' };
-        /// <summary>
-        /// Strips leading/trailing from each line and removes blank lines from multi-line strings. Normalizes line delimiter to a carriage return.
-        /// </summary>
-        public static string StripBlankLinesAndTrimSpace(string s)
-        {
-            var lines = s.Split(CRLFDelim);
-            var ret = new List<string>();
-            foreach (var line in lines)
-            {
-                var temp = line.Trim();
-                if (temp.Length > 0)
-                {
-                    ret.Add(temp);
-                }
-            }
-            return string.Join("\n", ret);
-        }
-
-        private static readonly Regex ReStripHTML = new Regex(@"<.*?>", RegexOptions.Compiled);
-        /// <summary>
-        /// Naïve removal of HTML tags from a string.  Based on:
-        /// https://stackoverflow.com/a/18154046.
-        /// </summary>
-        /// <param name="s"></param>
-        /// <returns></returns>
-        public static string StripHTML(string s)
-        {
-            return ReStripHTML.Replace(s, string.Empty);
         }
 
         public static void WaitDebuggerAttach()

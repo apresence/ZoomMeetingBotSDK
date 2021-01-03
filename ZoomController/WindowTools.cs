@@ -17,6 +17,7 @@ namespace ZoomController
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Windows.Forms;
+    using global::ZoomController.Interop.HostApp;
 
     /*
     public static class ProcessExtensions
@@ -434,7 +435,7 @@ namespace ZoomController
 
                 // get screen coordinates
                 //ClientToScreen(wndHandle, ref clientPoint);
-                Global.Log(Global.LogType.DBG, "ClickOnPoint {0:X8} {1}", (uint)wndHandle, clientPoint.ToString());
+                Global.hostApp.Log(LogType.DBG, "ClickOnPoint {0:X8} {1}", (uint)wndHandle, clientPoint.ToString());
 
                 // set cursor on coords, and press mouse
                 Cursor.Position = new System.Drawing.Point(clientPoint.X, clientPoint.Y);
@@ -679,7 +680,7 @@ namespace ZoomController
             // TBD: Move back to old app after we're done?
             lock (InputLock)
             {
-                Global.Log(Global.LogType.DBG, "WindowTools.SendKeys {0}", Global.repr(hide ? "(hidden)" : keys));
+                Global.hostApp.Log(LogType.DBG, "WindowTools.SendKeys {0}", Global.repr(hide ? "(hidden)" : keys));
                 FocusWindow(hWnd);
                 System.Windows.Forms.SendKeys.SendWait(keys);
 
@@ -705,7 +706,7 @@ namespace ZoomController
             {
                 var useClipboard = !Global.cfg.DisableClipboardPasteText;
 
-                Global.Log(Global.LogType.DBG, $"SendText useClipboard={Global.repr(useClipboard)} text={Global.repr(text)}");
+                Global.hostApp.Log(LogType.DBG, $"SendText useClipboard={Global.repr(useClipboard)} text={Global.repr(text)}");
 
                 Exception caughtException = null;
                 if (useClipboard)
@@ -739,8 +740,8 @@ namespace ZoomController
                     else
                     {
                         // Sometimes SetText() throws an error in KERNELBASE.dll.  Seems to happen when Chrome Remote Desktop is in use
-                        //Global.Log(Global.LogType.ERR, "Caught exception while trying to set clipboard text: {0}", Global.repr(caughtException.ToString()));
-                        Global.Log(Global.LogType.WRN, "Failed to set clipboard text; Falling back on SendKeys");
+                        //Global.hostApp.Log(LogType.ERR, "Caught exception while trying to set clipboard text: {0}", Global.repr(caughtException.ToString()));
+                        Global.hostApp.Log(LogType.WRN, "Failed to set clipboard text; Falling back on SendKeys");
                     }
                 }
 
@@ -779,31 +780,31 @@ namespace ZoomController
         /// </summary>
         public static void WakeScreen()
         {
-            Global.Log(Global.LogType.DBG, "Trying to wake the screen");
+            Global.hostApp.Log(LogType.DBG, "Trying to wake the screen");
             try
             {
                 WiggleMouse();
             }
             catch (Exception ex)
             {
-                Global.Log(Global.LogType.WRN, "Failed to wake screen: {0}", ex.ToString());
+                Global.hostApp.Log(LogType.WRN, "Failed to wake screen: {0}", ex.ToString());
             }
 
             if (ScreenSaver.GetScreenSaverRunning())
             {
-                Global.Log(Global.LogType.DBG, "Trying to stop the screen saver");
+                Global.hostApp.Log(LogType.DBG, "Trying to stop the screen saver");
                 try
                 {
                     ScreenSaver.KillScreenSaver();
                 }
                 catch (Exception ex)
                 {
-                    Global.Log(Global.LogType.WRN, "Failed to stop screen saver: {0}", ex.ToString());
+                    Global.hostApp.Log(LogType.WRN, "Failed to stop screen saver: {0}", ex.ToString());
                 }
             }
             else
             {
-                Global.Log(Global.LogType.DBG, "Screen saver is not running");
+                Global.hostApp.Log(LogType.DBG, "Screen saver is not running");
             }
         }
 

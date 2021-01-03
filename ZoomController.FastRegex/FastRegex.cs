@@ -1,11 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
-namespace ZoomController
+namespace ZoomController.Utils
 {
     /// <summary>
     /// These classes are intended to make working with large numbers of regular expressions efficient and convenient.  To do so normally, one would
@@ -74,7 +71,7 @@ namespace ZoomController
         {
             re = RegexCache.Get(pattern, RegexOptions.None);
         }
-        
+
         public static bool IsMatch(string pattern, string input, RegexOptions options)
         {
             return RegexCache.Get(pattern, options).IsMatch(input);

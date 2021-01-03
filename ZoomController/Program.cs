@@ -120,11 +120,14 @@ namespace ZoomController
     using System.Windows.Automation;
     using System.Windows.Forms;
     using System.Windows.Input;
+    using global::ZoomController.Interop.HostApp;
 
     internal class Program
     {
         private static int Main(string[] args)
         {
+            Global.hostApp = new UBHostApp();
+
             Global.LoadSettings();
 
             if (Array.IndexOf(args, "/protect") != -1)
@@ -259,7 +262,7 @@ namespace ZoomController
                 Console.WriteLine("Debugging enabled");
             }
 
-            //Global.Log(Global.LogType.DBG, "Main thread_id=0x{0:X8}", Thread.CurrentThread.ManagedThreadId);
+            //Global.hostApp.Log(LogType.DBG, "Main thread_id=0x{0:X8}", Thread.CurrentThread.ManagedThreadId);
 
             // TBD: Exit when Zoom app exits
             Task.Factory.StartNew(() =>
@@ -316,7 +319,7 @@ namespace ZoomController
                                     try
                                     {
                                         ae = AutomationElement.FromHandle(h);
-                                        Global.Log(Global.LogType.INF, "(Console 'a') : {0}", UIATools.WalkRawElementsToString(ae));
+                                        Global.hostApp.Log(LogType.INF, "(Console 'a') : {0}", UIATools.WalkRawElementsToString(ae));
                                     }
                                     catch
                                     {
