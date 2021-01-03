@@ -2,9 +2,9 @@
 using System.Diagnostics;
 using ZoomController.Utils;
 using ZoomController.Interop.HostApp;
-using ZoomController.Interop.Bot;
+using ZoomController.Interop.ChatBot;
 
-namespace ZoomController.Bot
+namespace ZoomController.ChatBot
 {
     namespace ChatterBot
     {

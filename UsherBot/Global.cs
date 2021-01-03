@@ -108,7 +108,7 @@ namespace ZoomController
             /// <summary>
             /// Sets the gender of the Bot.
             /// </summary>
-            public Interop.Bot.Gender BotGender { get; set; }
+            public Interop.ChatBot.Gender BotGender { get; set; }
 
             /// <summary>
             /// ID of the meeting to join.
@@ -246,7 +246,7 @@ namespace ZoomController
                 UnknownParticipantWaitSecs = 30;
                 MyParticipantName = "ZoomBot";
                 BotAutomationFlags = BotAutomationFlag.All;
-                BotGender = Interop.Bot.Gender.Female;
+                BotGender = Interop.ChatBot.Gender.Female;
                 MeetingID = null;
                 BroadcastCommands = new Dictionary<string, string>();
                 BroadcastCommandGuardTimeSecs = 300;

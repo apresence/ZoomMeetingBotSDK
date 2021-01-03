@@ -1,6 +1,6 @@
 ﻿using ZoomController.Interop.HostApp;
 
-namespace ZoomController.Interop.Bot
+namespace ZoomController.Interop.ChatBot
 {
     public enum Gender
     {

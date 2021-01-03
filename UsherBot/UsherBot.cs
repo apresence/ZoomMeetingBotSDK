@@ -9,7 +9,7 @@
     using System.Reflection;
     using System.Text.RegularExpressions;
     using System.Threading;
-    using global::ZoomController.Interop.Bot;
+    using global::ZoomController.Interop.ChatBot;
     using global::ZoomController.Interop.HostApp;
     using global::ZoomController.Utils;
 

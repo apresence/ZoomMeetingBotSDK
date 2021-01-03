@@ -12,13 +12,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GmailSenderLib", "GmailSender\GmailSenderLib\GmailSenderLib.csproj", "{340B0E7F-3542-4527-9473-E4A5A31188F1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatterBot", "ChatterBot\ZoomMeetingBotSDK.Bot.ChatterBot.csproj", "{CC913E5A-5EE4-4B4A-9A21-CAD10CD658D4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomMeetingBotSDK.ChatBot.ChatterBot", "ChatterBot\ZoomMeetingBotSDK.ChatBot.ChatterBot.csproj", "{CC913E5A-5EE4-4B4A-9A21-CAD10CD658D4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Interop", "Interop\ZoomMeetingBotSDK.Interop.csproj", "{49F30735-CB2A-46F6-8A58-11A6154CB30D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomMeetingBotSDK.Interop", "Interop\ZoomMeetingBotSDK.Interop.csproj", "{49F30735-CB2A-46F6-8A58-11A6154CB30D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sound", "Sound\ZoomMeetingBotSDK.Sound.csproj", "{B8BF3636-96E4-45DF-B5AE-BF5AD730B862}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomMeetingBotSDK.Sound", "Sound\ZoomMeetingBotSDK.Sound.csproj", "{B8BF3636-96E4-45DF-B5AE-BF5AD730B862}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Utils", "Utils\ZoomMeetingBotSDK.Utils.csproj", "{6E75E9FF-16F0-42B8-BBD8-EE25B9F52E0E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomMeetingBotSDK.Utils", "Utils\ZoomMeetingBotSDK.Utils.csproj", "{6E75E9FF-16F0-42B8-BBD8-EE25B9F52E0E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
