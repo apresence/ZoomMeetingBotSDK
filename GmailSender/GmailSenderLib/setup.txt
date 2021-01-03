@@ -1,0 +1,9 @@
+https://developers.google.com/gmail/api/quickstart/dotnet
+* Enable GMail API
+  * Project Name: ZoomController
+  * OAuth client: Desktop app
+  * Click "DOWNLOAD CLIENT CONFIGURATION"
+* Install-Package Google.Apis.Gmail.v1
+* Install-Package MimeKit
+
+https://www.googleapis.com/auth/gmail.send	Send messages only. No read or modify privileges on mailbox.

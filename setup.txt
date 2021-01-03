@@ -1,0 +1,49 @@
+- Create UsherBot account and add it do Administrators
+- Login as UsherBot
+- Download SysInternalsSuite from https://download.sysinternals.com/files/SysinternalsSuite.zip
+  - Extract zip to somewhere.  Copy to C:\Program Files
+- Install .NET Framework 4.8 Runtime from https://dotnet.microsoft.com/download/dotnet-framework/thank-you/net48-web-installer
+- Chrome Setup:
+  - Install Chrome
+  - Set up Google account
+  - Start Zoom meeting manually
+  - When prompted, install Zoom Launcher
+  - Open Chat & Participant windows
+  - Pop out both of them
+  - Quit meeting
+- Extract UsherBot into C:\Program Files\UsherBot
+- Run install_ubCert.cmd to install UsherBot's certificate
+- Run Bginfo from SysInternalsSuite, load bginfo.bgi
+- Set up auto logon:
+  - Run Autologon from SysInternalsSuite
+  - Type in UsherBot's password, and click Enable
+- Right-click UsherBot.exe, select Properties, click the Compatibility tab, then check "Run this program as administrator"
+- Set up bot virtual webcam:
+  - Install Webcamoid, 64 bit installable from http://webcamoid.github.io/
+  - To set up default image:
+    - Browse to C:\Program Files\AkVirtualCamera.plugin\share
+	- Rename TestFrame.bmp to something else (Ex: TestFram_Orig.bmp)
+	- Copy new TestFrame.bmp	
+  - To do live video, etc:
+    - Start Webcamoid.  Don't mind the weird mirror-in-a-mirror effect
+    - Hover mouse at the bottom, click camera icon, click green "+" at the end, search for UsherBot image file (Have to select all files in file name filter drop-down), click Ok
+    - Hover mouse at the bottom, click the settings sprocket, click "Virtual camera", Add, for Description put UsherBot, click Ok
+    - Hit Stop, then Play
+    - Close Webcamoid
+- (AWS) Set up timezone, ex: tzutil /s "Eastern Standard Time"
+- Go to Task Scheduler, create a folder named "UsherBot", import the Tasks xml files
+  - Change user to UsherBot (since it changes for each computer)
+
+--profile-directory=\"Profile 7\" https://zoom.us/signin
+
+                        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+                        "--profile-directory=\"Profile 7\" https://zoom.us/signin");
+
+- Running high-res: Nice DCV --> https://www.nice-dcv.com/
+  - Nice DVC Virtual Display Driver for EC2
+    https://d1uj6qtbmh3dt5.cloudfront.net/Drivers/nice-dcv-virtual-display-x64-Release-34.msi
+  - Registry settings: HKEY_USERS/S-1-5-18/Software/GSettings/com/nicesoftware/dcv/
+    connectivity > web-port REG_SZ "20443"
+    display > console-session-default-layout REG_SZ "[{'w':<2048>, 'h':<4096>, 'x':<0>, 'y': <0>}]"
+    session-management > create-session REG_DWORD 0x000000001
+      automatic-console-session > owner REG_SZ "UsherBot"
