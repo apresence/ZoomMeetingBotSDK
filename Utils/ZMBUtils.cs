@@ -6,12 +6,12 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 
-namespace ZoomController.Utils
+namespace ZoomMeetngBotSDK.Utils
 {
     /// <summary>
     /// We make this class abstract so that some members can be overriden with more tailored implementations.
     /// </summary>
-    public abstract class ZCUtils
+    public abstract class ZMBUtils
     {
         public static readonly char[] CRLFDelim = new char[] { '\r', '\n' };
 

@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using ZoomController.Utils;
+using ZoomMeetngBotSDK.Utils;
 
-namespace ZoomController
+namespace ZoomMeetngBotSDK
 {
     public static class StringExtensions
     {
@@ -86,7 +86,7 @@ namespace ZoomController
         /// </summary>
         public static string StripBlankLinesAndTrimSpace(this string s)
         {
-            var lines = s.Split(ZCUtils.CRLFDelim);
+            var lines = s.Split(ZMBUtils.CRLFDelim);
             var ret = new List<string>();
             foreach (var line in lines)
             {

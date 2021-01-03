@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ZoomController
+namespace ZoomMeetngBotSDK
 {
     public static class IEnumerableExtensions
     {

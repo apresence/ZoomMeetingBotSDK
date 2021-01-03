@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Diagnostics;
-using ZoomController.Utils;
-using ZoomController.Interop.HostApp;
-using ZoomController.Interop.ChatBot;
+using ZoomMeetngBotSDK.Utils;
+using ZoomMeetngBotSDK.Interop.HostApp;
+using ZoomMeetngBotSDK.Interop.ChatBot;
 
-namespace ZoomController.ChatBot
+namespace ZoomMeetngBotSDK.ChatBot
 {
     namespace ChatterBot
     {
@@ -65,7 +65,7 @@ namespace ZoomController.ChatBot
                 }
                 catch (Exception ex)
                 {
-                    hostApp.Log(LogType.ERR, "chatBot failed to start: {0}", ZCUtils.repr(ex.ToString()));
+                    hostApp.Log(LogType.ERR, "chatBot failed to start: {0}", ZMBUtils.repr(ex.ToString()));
                 }
             }
 
@@ -124,12 +124,12 @@ namespace ZoomController.ChatBot
                     return null;
                 }
 
-                hostApp.Log(LogType.DBG, "chatBot > {0}", ZCUtils.repr(input));
+                hostApp.Log(LogType.DBG, "chatBot > {0}", ZMBUtils.repr(input));
                 p.StandardInput.WriteLine(input);
 
                 // TBD: Implement some sort of timeout or something so we don't hang forever if things go wonky
                 string line = p.StandardOutput.ReadLine();
-                hostApp.Log(LogType.DBG, "chatBot < {0}", ZCUtils.repr(line));
+                hostApp.Log(LogType.DBG, "chatBot < {0}", ZMBUtils.repr(line));
 
                 return line;
             }

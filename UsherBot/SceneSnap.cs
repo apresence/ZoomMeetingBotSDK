@@ -1,4 +1,4 @@
-﻿namespace ZoomController
+﻿namespace ZoomMeetngBotSDK
 {
     using System;
     using System.Drawing;

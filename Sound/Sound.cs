@@ -8,10 +8,10 @@ using System.Collections.Concurrent;
 using System.Security.AccessControl;
 using System.IO;
 using System.Media;
-using ZoomController.Interop.HostApp;
-using global::ZoomController.Utils;
+using ZoomMeetngBotSDK.Interop.HostApp;
+using global::ZoomMeetngBotSDK.Utils;
 
-namespace ZoomController
+namespace ZoomMeetngBotSDK
 {
     public static class Sound
     {
@@ -37,7 +37,7 @@ namespace ZoomController
         {
             if (hostApp != null)
             {
-                hostApp.Log(LogType.WRN, "ZoomController.Sound: Already Initialized");
+                hostApp.Log(LogType.WRN, "ZoomMeetngBotSDK.Sound: Already Initialized");
                 return;
             }
 
@@ -52,10 +52,10 @@ namespace ZoomController
                 }
                 catch (Exception e)
                 {
-                    hostApp.Log(LogType.ERR, "TTS failed to load voice {0}; Falling back on default; Err={1}", voice, ZCUtils.repr(e));
+                    hostApp.Log(LogType.ERR, "TTS failed to load voice {0}; Falling back on default; Err={1}", voice, ZMBUtils.repr(e));
                 }
             }
-            hostApp.Log(LogType.INF, "TTS Loaded voice {0}", ZCUtils.repr(tts.Voice.Name));
+            hostApp.Log(LogType.INF, "TTS Loaded voice {0}", ZMBUtils.repr(tts.Voice.Name));
             tts.SetOutputToDefaultAudioDevice();
             timer = new System.Threading.Timer(TimerHandler, null, 0, 250);
         }
@@ -74,7 +74,7 @@ namespace ZoomController
                     soundFilePath += ".wav";
                 }
             }
-            hostApp.Log(LogType.INF, "Playing random sound file: {0}", ZCUtils.repr(soundFilePath));
+            hostApp.Log(LogType.INF, "Playing random sound file: {0}", ZMBUtils.repr(soundFilePath));
             new SoundPlayer(soundFilePath).PlaySync();
         }
 
@@ -86,7 +86,7 @@ namespace ZoomController
                 {
                     if (si.Action == "speak")
                     {
-                        hostApp.Log(LogType.INF, "TTS Speaking: {0}", ZCUtils.repr(si.Parameters));
+                        hostApp.Log(LogType.INF, "TTS Speaking: {0}", ZMBUtils.repr(si.Parameters));
                         tts.Speak(si.Parameters);
                     }
                     else if (si.Action == "play")
@@ -100,7 +100,7 @@ namespace ZoomController
                 }
                 catch (Exception ex)
                 {
-                    hostApp.Log(LogType.ERR, "Exception while processing sound item [{0}, {1}]: {2}", ZCUtils.repr(si.Action), ZCUtils.repr(si.Parameters), ZCUtils.repr(ex.ToString()));
+                    hostApp.Log(LogType.ERR, "Exception while processing sound item [{0}, {1}]: {2}", ZMBUtils.repr(si.Action), ZMBUtils.repr(si.Parameters), ZMBUtils.repr(ex.ToString()));
                 }
             }
         }

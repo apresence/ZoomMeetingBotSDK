@@ -61,7 +61,7 @@
 //   - Could also do refcount - ie: only mark participant as leaving if the name does not show up twice
 //   - Could pull participant count from window title and use that to determine if we have a complete list or not
 //   - Is there some way to get the list without these issues?
-// x Refactor to move all interaction/events to ZoomController and add OnParticipantWaiting, OnParticipantJoining, OnParticipantJoin, OnParticipantLeave, etc.
+// x Refactor to move all interaction/events to ZoomMeetngBotSDK and add OnParticipantWaiting, OnParticipantJoining, OnParticipantJoin, OnParticipantLeave, etc.
 // x Retry to open Zoom if it fails
 // x Could improve reliability of selecting menu items by using Focus events to detect which menu item we're on and select the right one
 // x Re-write for UIA support
@@ -79,7 +79,7 @@
 // x Parse video, audio states properly
 // x Fix issue with screen sharing.  Probaby need to detect & restore Zoom window back to smaller size
 // x Why so much delay on stand-alone PC?
-// x Move all of the ZoomController stuff into its own class
+// x Move all of the ZoomMeetngBotSDK stuff into its own class
 // x Track attendee state changes like video on/off
 // x Track attendees who leave
 // x Immediately join numbers?
@@ -107,7 +107,7 @@
 //   This would avoid the issue with trying to do something on an item that is not in view
 // x Fix issue with Zoom meeting timeout causing Zoom exe to hang around
 // x Login directly to Zoom app with Zoom credentials, bypassing browser.  Add encryption support for password
-namespace ZoomController
+namespace ZoomMeetngBotSDK
 {
     using System;
     using System.Collections.Generic;
@@ -120,7 +120,7 @@ namespace ZoomController
     using System.Windows.Automation;
     using System.Windows.Forms;
     using System.Windows.Input;
-    using global::ZoomController.Interop.HostApp;
+    using global::ZoomMeetngBotSDK.Interop.HostApp;
 
     internal class Program
     {
@@ -271,8 +271,8 @@ namespace ZoomController
                     {
                         WindowTools.WakeScreen();
 
-                        ZoomController.CalcWindowLayout();
-                        WindowTools.SetWindowSize(Process.GetCurrentProcess().MainWindowHandle, ZoomController.AppRect);
+                        ZoomMeetngBotSDK.CalcWindowLayout();
+                        WindowTools.SetWindowSize(Process.GetCurrentProcess().MainWindowHandle, ZoomMeetngBotSDK.AppRect);
 
                         if (Global.cfg.WaitForDebuggerAttach)
                         {
@@ -309,9 +309,9 @@ namespace ZoomController
                                 Console.WriteLine("CONSOLE : === BEGIN AETree Enum ===");
                                 var handles = new List<(IntPtr h, string name)>
                                 {
-                                    (ZoomController.GetZoomMeetingWindowHandle(), "Main"),
-                                    (ZoomController.GetParticipantsPanelWindowHandle(), "Paticipants"),
-                                    (ZoomController.GetChatPanelWindowHandle(), "Chat"),
+                                    (ZoomMeetngBotSDK.GetZoomMeetingWindowHandle(), "Main"),
+                                    (ZoomMeetngBotSDK.GetParticipantsPanelWindowHandle(), "Paticipants"),
+                                    (ZoomMeetngBotSDK.GetChatPanelWindowHandle(), "Chat"),
                                 };
                                 AutomationElement ae;
                                 foreach (var (h, name) in handles)

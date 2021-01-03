@@ -5,7 +5,7 @@
 ///
 /// In other words: This class needs a serious re-write!
 /// </summary>
-namespace ZoomController
+namespace ZoomMeetngBotSDK
 {
     using System;
     using System.Collections.Generic;
@@ -17,7 +17,7 @@ namespace ZoomController
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Windows.Forms;
-    using global::ZoomController.Interop.HostApp;
+    using global::ZoomMeetngBotSDK.Interop.HostApp;
 
     /*
     public static class ProcessExtensions

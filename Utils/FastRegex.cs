@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-namespace ZoomController.Utils
+namespace ZoomMeetngBotSDK.Utils
 {
     /// <summary>
     /// These classes are intended to make working with large numbers of regular expressions efficient and convenient.  To do so normally, one would

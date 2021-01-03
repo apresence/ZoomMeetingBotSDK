@@ -1,12 +1,12 @@
-﻿namespace ZoomController
+﻿namespace ZoomMeetngBotSDK
 {
     using System;
     using System.Collections.Generic;
     using System.Text;
     using System.Windows.Automation;
     using System.Windows.Forms;
-    using global::ZoomController.Interop.HostApp;
-    using global::ZoomController.Utils;
+    using global::ZoomMeetngBotSDK.Interop.HostApp;
+    using global::ZoomMeetngBotSDK.Utils;
 
     internal class UIATools
     {
@@ -145,7 +145,7 @@
             var nodeAttendee = TreeWalker.ContentViewWalker.GetNextSibling(ae);
             while (nodeAttendee != null)
             {
-                Global.hostApp.Log(LogType.DBG, "  {0}", ZCUtils.GetObjStrs(nodeAttendee.Current));
+                Global.hostApp.Log(LogType.DBG, "  {0}", ZMBUtils.GetObjStrs(nodeAttendee.Current));
                 LogSupportedPatterns(nodeAttendee);
                 nodeAttendee = TreeWalker.RawViewWalker.GetNextSibling(nodeAttendee);
             }
@@ -157,7 +157,7 @@
             var nodeAttendee = TreeWalker.ContentViewWalker.GetFirstChild(ae);
             while (nodeAttendee != null)
             {
-                Global.hostApp.Log(LogType.DBG, "  {0}", ZCUtils.GetObjStrs(nodeAttendee.Current));
+                Global.hostApp.Log(LogType.DBG, "  {0}", ZMBUtils.GetObjStrs(nodeAttendee.Current));
                 LogSupportedPatterns(nodeAttendee);
                 nodeAttendee = TreeWalker.RawViewWalker.GetNextSibling(nodeAttendee);
             }

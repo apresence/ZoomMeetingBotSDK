@@ -9,10 +9,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
-using ZoomController.Interop.HostApp;
-using ZoomController.Utils;
+using ZoomMeetngBotSDK.Interop.HostApp;
+using ZoomMeetngBotSDK.Utils;
 
-namespace ZoomController
+namespace ZoomMeetngBotSDK
 {
     public class Global
     {
@@ -209,7 +209,7 @@ namespace ZoomController
             public string TTSVoice { get; set; }
 
             /// <summary>
-            /// Configures which display should be used to run Zoom, ZoomController, UsherBot, etc.  The default is whichever display is set as the "main" screen
+            /// Configures which display should be used to run Zoom, ZoomMeetngBotSDK, UsherBot, etc.  The default is whichever display is set as the "main" screen
             /// </summary>
             public string Screen { get; set; }
 
@@ -318,9 +318,9 @@ namespace ZoomController
 
             cfg = JsonSerializer.Deserialize<ConfigurationSettings>(File.ReadAllText(@"settings.json"));
 
-            ZCUtils.ExpandDictionaryPipes(cfg.BroadcastCommands);
-            ZCUtils.ExpandDictionaryPipes(cfg.OneTimeHiSequences);
-            ZCUtils.ExpandDictionaryPipes(cfg.SmallTalkSequences);
+            ZMBUtils.ExpandDictionaryPipes(cfg.BroadcastCommands);
+            ZMBUtils.ExpandDictionaryPipes(cfg.OneTimeHiSequences);
+            ZMBUtils.ExpandDictionaryPipes(cfg.SmallTalkSequences);
         }
 
         public static void SaveSettings()

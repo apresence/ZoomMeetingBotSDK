@@ -1,9 +1,9 @@
-﻿namespace ZoomController
+﻿namespace ZoomMeetngBotSDK
 {
     using System;
     using System.IO;
     using System.Threading;
-    using global::ZoomController.Interop.HostApp;
+    using global::ZoomMeetngBotSDK.Interop.HostApp;
 
     public class UBHostApp : IHostApp
     {

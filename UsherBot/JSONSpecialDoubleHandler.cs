@@ -1,6 +1,6 @@
 ﻿// Snarfed from https://github.com/dotnet/runtime/issues/31024
 
-namespace ZoomController
+namespace ZoomMeetngBotSDK
 {
     using System;
     using System.Text.Json;

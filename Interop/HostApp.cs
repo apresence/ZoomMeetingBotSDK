@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ZoomController.Interop.HostApp
+namespace ZoomMeetngBotSDK.Interop.HostApp
 {
     public enum LogType
     {
