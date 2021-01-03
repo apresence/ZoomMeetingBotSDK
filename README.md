@@ -1,6 +1,8 @@
 # ZoomMeetingBotSDK
 
-This project provides a C# SDK which aims to make implementing Bots to manage Zoom meetings easy.
+This project provides a C# SDK which aims to make implementing Bots to manage Zoom meetings easier.
+
+The goal is to relieve meeting hosts of much of the burden involved with running meetings so that they can focus on actually *meeting* in their meetings.
 
 A reference Bot called "UsherBot" is included, which provides the following features:
 * Start and stop meetings on-demand
@@ -10,8 +12,6 @@ A reference Bot called "UsherBot" is included, which provides the following feat
 * A pluggable system to experiment with various ChatBots so the Bot can engage in banter with participants.  A wrapper around the [ChatterBot](https://pypi.org/project/ChatterBot/) python package is used for this purpose
 * It can "speak" using text-to-speech
 * It can automatically send emails via Gmail on demand
-
-The goal with this SDK is to relieve meeting hosts of much of the burden involved with running meetings so that they can focus on actually *meeting* in their meetings.
 
 **Don't bother trying to clone the code just yet!**  While it is already live and managing several meetings, the code is not yet in a state where it can be easily deployed.  I'd hate for someone to clone the code and get frustrated trying to get it to work.
 
@@ -58,4 +58,4 @@ If you wish to modify the code, [Visual Studio Community 2019](https://visualstu
 
 Since the SDK currently works by manipulating the Zoom user interface, changes to the Zoom Meeting Client can cause it to stop working.  For example, if it's looking for a dialog named "Rename User" that gets changed at some point to "Change User Name", the SDK will not be able to find it.  Some steps have been taken to detect and compensate for these changes, but from time to time you can expect it to stop working when Zoom releases an incompatible update.
 
-In other words: This is a highly experimental project that should not be used in production.
+In other words: **This is a highly experimental project that should not be used in production.**
