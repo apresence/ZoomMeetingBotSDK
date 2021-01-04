@@ -20,8 +20,8 @@ I'm working on cleaning up the code now, including the following:
 - [ ] Create a sample configuration that's ready to go with minimal tweaking
 - [x] Do not commit private files/information such as zoom username, password, etc. and other content that is not needed
 - [X] Make chat bots pluggable
-- [ ] Move RemedialChatBot out into it's own DLL
-- [ ] Clean up ChatterBot wrapper; the bits are all over the place
+- [X] Move SimpleBot chatbot out into it's own DLL
+- [X] Clean up ChatterBot wrapper; the bits are all over the place
 - [X] Add support for direct Zoom account login (Was previously depending on Google SSO)
 - [ ] Create a Quick Start Guide
 - [ ] Re-factor to use the native Windows Zoom SDK which appears to be stable as of Jan 2021
