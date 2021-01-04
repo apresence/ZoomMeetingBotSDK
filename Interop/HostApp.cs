@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -17,12 +18,15 @@ namespace ZoomMeetingBotSDK.Interop.HostApp
 
     public interface IHostApp
     {
+        void Log(string sMessage);
+
+        void Log(LogType nLogType, string sMessage);
 
         void Log(LogType nLogType, string sMessage, params object[] values);
-        dynamic GetSetting(string key);
+        dynamic GetSetting(string key, dynamic default_value = null);
     }
 
-    public abstract class SimpleHostApp : IHostApp
+    public class CHostApp : IHostApp
     {
         // Provide a lock across all instances of this object.
         private static readonly object logLock = new object();
@@ -30,26 +34,43 @@ namespace ZoomMeetingBotSDK.Interop.HostApp
         /// <summary>
         /// Reference implementation for retrieving settings.  Returns null for all keys.
         /// </summary>
-        dynamic IHostApp.GetSetting(string key)
+        public virtual dynamic GetSetting(string key, dynamic default_value)
         {
-            return null;
+            return default_value;
         }
 
         /// <summary>
-        /// Reference implementation for logging function.  Logs to the console.
+        /// Reference implementation for logging function.  Logs to the console and debug output window.
         /// </summary>
-        void IHostApp.Log(LogType nLogType, string sMessage, params object[] values)
+        public virtual void Log(string sMessage)
         {
-            string s = string.Format(
-                    "{0} {1} {2}",
-                    DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"),
-                    nLogType.ToString(),
-                    string.Format(sMessage, values));
-
             lock (logLock)
             {
-                Console.WriteLine(s);
+                Debug.WriteLine(sMessage);
+                Console.WriteLine(sMessage);
             }
+        }
+
+
+        /// <summary>
+        /// Prepends timestamp and log type to log message, then passes it to Log(sMessage).
+        /// </summary>
+        public virtual void Log(LogType nLogType, string sMessage)
+        {
+            Log(new StringBuilder(DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"))
+                .Append(' ')
+                .Append(nLogType.ToString())
+                .Append(' ')
+                .Append(sMessage)
+                .ToString());
+        }
+
+        /// <summary>
+        /// Prepends timestamp and log type to log message, performing string format expansion, then passing the result along to Log(nLogType, sMessage).
+        /// </summary>
+        public virtual void Log(LogType nLogType, string sMessage, params object[] values)
+        {
+            Log(nLogType, string.Format(sMessage, values));
         }
     }
 }

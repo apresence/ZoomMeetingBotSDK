@@ -46,10 +46,10 @@
                 //   aei.Orientation            Always 0
 
                 l.Add(aei.ControlType.ProgrammaticName.Split('.')[1]);
-                l.Add(Global.repr(aei.Name));
+                l.Add(ZMBUtils.repr(aei.Name));
                 if ((aei.AutomationId != null) && (aei.AutomationId.Length > 0))
                 {
-                    l.Add("AutomationId:" + Global.repr(aei.AutomationId));
+                    l.Add("AutomationId:" + ZMBUtils.repr(aei.AutomationId));
                 }
 
                 if (!aei.BoundingRectangle.IsEmpty)
@@ -74,12 +74,12 @@
 
                 if ((aei.AccessKey != null) && (aei.AccessKey.Length > 0))
                 {
-                    l.Add("AccessKey:" + Global.repr(aei.AccessKey));
+                    l.Add("AccessKey:" + ZMBUtils.repr(aei.AccessKey));
                 }
 
                 if ((aei.ClassName != null) && (aei.ClassName.Length > 0))
                 {
-                    l.Add("ClassName:" + Global.repr(aei.ClassName));
+                    l.Add("ClassName:" + ZMBUtils.repr(aei.ClassName));
                 }
 
                 if (aei.NativeWindowHandle != 0)
@@ -103,7 +103,7 @@
                     l.Add("patterns:[" + string.Join(",", p) + "]");
                 }
 
-                l.Add("rids:" + Global.repr(ae.GetRuntimeId()));
+                l.Add("rids:" + ZMBUtils.repr(ae.GetRuntimeId()));
 
                 return string.Join(" ", l);
             }
@@ -127,7 +127,7 @@
 
         public static void LogSupportedPatterns(AutomationElement ae)
         {
-            Global.hostApp.Log(LogType.DBG, "Supported patterns for {0} {1}:", Global.repr(ae.Current.LocalizedControlType), Global.repr(ae.Current.Name));
+            Global.hostApp.Log(LogType.DBG, "Supported patterns for {0} {1}:", ZMBUtils.repr(ae.Current.LocalizedControlType), ZMBUtils.repr(ae.Current.Name));
 
             List<string> l = new List<string>();
 

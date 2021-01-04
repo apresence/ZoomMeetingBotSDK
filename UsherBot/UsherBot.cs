@@ -224,7 +224,7 @@
                 if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.RenameMyself) != 0) && (ZoomMeetingBotSDK.me.name != Global.cfg.MyParticipantName))
                 {
                     // Rename myself.  Event handler will type in the name when the dialog pops up
-                    Global.hostApp.Log(LogType.INF, "BOT Renaming myself from {0} to {1}", Global.repr(ZoomMeetingBotSDK.me.name), Global.repr(Global.cfg.MyParticipantName));
+                    Global.hostApp.Log(LogType.INF, "BOT Renaming myself from {0} to {1}", ZMBUtils.repr(ZoomMeetingBotSDK.me.name), ZMBUtils.repr(Global.cfg.MyParticipantName));
                     ZoomMeetingBotSDK.RenameParticipant(ZoomMeetingBotSDK.me, Global.cfg.MyParticipantName);
                 }
 
@@ -266,7 +266,7 @@
                     {
                         if (bAdmitKnown)
                         {
-                            Global.hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", Global.repr(p.name));
+                            Global.hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", ZMBUtils.repr(p.name));
                             if (ZoomMeetingBotSDK.AdmitParticipant(p))
                             {
                                 //SendTopic(p.name, false);
@@ -323,7 +323,7 @@
                         if (GoodUsers.TryGetValue(sCleanName, out bool bCoHost) && bCoHost)
                         {
                             // Yep, they should be, so do the promotion
-                            Global.hostApp.Log(LogType.INF, "BOT Promoting {0} to Co-host", Global.repr(p.name));
+                            Global.hostApp.Log(LogType.INF, "BOT Promoting {0} to Co-host", ZMBUtils.repr(p.name));
                             ZoomMeetingBotSDK.PromoteParticipant(p);
                         }
                     }
@@ -582,13 +582,13 @@
 
         private static void OnMeetingOptionStateChange(object sender, ZoomMeetingBotSDK.MeetingOptionStateChangeEventArgs e)
         {
-            Global.hostApp.Log(LogType.INF, "Meeting option {0} changed to {1}", Global.repr(e.optionName), e.newState.ToString());
+            Global.hostApp.Log(LogType.INF, "Meeting option {0} changed to {1}", ZMBUtils.repr(e.optionName), e.newState.ToString());
         }
 
         private static void OnParticipantAttendanceStatusChange(object sender, ZoomMeetingBotSDK.ParticipantEventArgs e)
         {
             ZoomMeetingBotSDK.Participant p = e.participant;
-            Global.hostApp.Log(LogType.INF, "Participant {0} status {1}", Global.repr(p.name), p.status.ToString());
+            Global.hostApp.Log(LogType.INF, "Participant {0} status {1}", ZMBUtils.repr(p.name), p.status.ToString());
 
             // TBD: Could immediately admit recognized attendees
         }
@@ -786,7 +786,7 @@
 
         private static void OnChatMessageReceive(object source, ZoomMeetingBotSDK.ChatEventArgs e)
         {
-            Global.hostApp.Log(LogType.INF, "New message from {0} to {1}: {2}", Global.repr(e.from), Global.repr(e.to), Global.repr(e.text));
+            Global.hostApp.Log(LogType.INF, "New message from {0} to {1}: {2}", ZMBUtils.repr(e.from), ZMBUtils.repr(e.to), ZMBUtils.repr(e.text));
 
             string sTo = e.to;
             string sFrom = e.from;
@@ -890,7 +890,7 @@
                             break;
                         }
 
-                        Global.hostApp.Log(LogType.WRN, $"ChatBot converse with {Global.repr(chatBot.GetChatBotInfo().Name)} failed: {Global.repr(failureMsg)}");
+                        Global.hostApp.Log(LogType.WRN, $"ChatBot converse with {ZMBUtils.repr(chatBot.GetChatBotInfo().Name)} failed: {ZMBUtils.repr(failureMsg)}");
                     }
                 }
 
@@ -920,13 +920,13 @@
             // Only allow admin users to run the following commands
             if (!bAdmin)
             {
-                Global.hostApp.Log(LogType.WRN, "Ignoring command {0} from non-admin {1}", Global.repr(sMsg), Global.repr(sFrom));
+                Global.hostApp.Log(LogType.WRN, "Ignoring command {0} from non-admin {1}", ZMBUtils.repr(sMsg), ZMBUtils.repr(sFrom));
                 return;
             }
 
             if (!ZoomMeetingBotSDK.participants.TryGetValue(sFrom, out ZoomMeetingBotSDK.Participant sender))
             {
-                Global.hostApp.Log(LogType.ERR, "Received command {0} from {1}, but I don't have a Participant class for them", Global.repr(sMsg), Global.repr(e.from));
+                Global.hostApp.Log(LogType.ERR, "Received command {0} from {1}, but I don't have a Participant class for them", ZMBUtils.repr(sMsg), ZMBUtils.repr(e.from));
                 return;
             }
 
@@ -1078,7 +1078,7 @@
                 }
                 else
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, the {0} command requires either on or off as a parameter", Global.repr(sCommand));
+                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, the {0} command requires either on or off as a parameter", ZMBUtils.repr(sCommand));
                     return;
                 }
 
@@ -1152,7 +1152,7 @@
 
             if (sCommand == "play")
             {
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Playing: {0}", Global.repr(sTarget));
+                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Playing: {0}", ZMBUtils.repr(sTarget));
                 Sound.Play(sTarget);
                 return;
             }
@@ -1166,7 +1166,7 @@
             // All of the following require a participant target
             if (!ZoomMeetingBotSDK.participants.TryGetValue(sTarget, out ZoomMeetingBotSDK.Participant target))
             {
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, I don't see anyone named here named {0}. Remember, Case Matters!", Global.repr(sTarget));
+                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, I don't see anyone named here named {0}. Remember, Case Matters!", ZMBUtils.repr(sTarget));
                 return;
             }
 
@@ -1186,7 +1186,7 @@
                     return;
                 }
 
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Renaming {0} to {1}", Global.repr(target.name), Global.repr(newName));
+                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Renaming {0} to {1}", ZMBUtils.repr(target.name), ZMBUtils.repr(newName));
                 ZoomMeetingBotSDK.RenameParticipant(target, newName);
                 return;
             }
@@ -1195,11 +1195,11 @@
             {
                 if (target.status != ZoomMeetingBotSDK.ParticipantStatus.Waiting)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} is not waiting", Global.repr(target.name));
+                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} is not waiting", ZMBUtils.repr(target.name));
                 }
                 else
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Admitting {0}", Global.repr(target.name));
+                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Admitting {0}", ZMBUtils.repr(target.name));
                     if (ZoomMeetingBotSDK.AdmitParticipant(target))
                     {
                         // Participant was successfully admitted.  We want to send them the topic if one is set, but we can't do that
@@ -1215,7 +1215,7 @@
             // Commands after here require the participant to be attending
             if (target.status != ZoomMeetingBotSDK.ParticipantStatus.Attending)
             {
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} is not attending", Global.repr(target.name));
+                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} is not attending", ZMBUtils.repr(target.name));
                 return;
             }
 
@@ -1223,16 +1223,16 @@
             {
                 if (target.role != ZoomMeetingBotSDK.ParticipantRole.None)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} is already Host or Co-Host so cannot be promoted", Global.repr(target.name));
+                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} is already Host or Co-Host so cannot be promoted", ZMBUtils.repr(target.name));
                 }
                 else if (target.videoStatus != ZoomMeetingBotSDK.ParticipantVideoStatus.On)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Co-Host name matched for {0}, but video is off", Global.repr(target.name));
+                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Co-Host name matched for {0}, but video is off", ZMBUtils.repr(target.name));
                     return;
                 }
                 else
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Promoting {0} to Co-Host", Global.repr(target.name));
+                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Promoting {0} to Co-Host", ZMBUtils.repr(target.name));
                     ZoomMeetingBotSDK.PromoteParticipant(target);
                 }
 
@@ -1243,11 +1243,11 @@
             {
                 if (target.role != ZoomMeetingBotSDK.ParticipantRole.CoHost)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} isn't Co-Host so cannot be demoted", Global.repr(target.name));
+                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} isn't Co-Host so cannot be demoted", ZMBUtils.repr(target.name));
                 }
                 else
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Demoting {0}", Global.repr(target.name));
+                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Demoting {0}", ZMBUtils.repr(target.name));
                     ZoomMeetingBotSDK.DemoteParticipant(target);
                 }
 
@@ -1256,14 +1256,14 @@
 
             if (sCommand == "mute")
             {
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Muting {0}", Global.repr(target.name));
+                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Muting {0}", ZMBUtils.repr(target.name));
                 ZoomMeetingBotSDK.MuteParticipant(target);
                 return;
             }
 
             if (sCommand == "unmute")
             {
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Requesting {0} to Unmute", Global.repr(target.name));
+                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Requesting {0} to Unmute", ZMBUtils.repr(target.name));
                 ZoomMeetingBotSDK.UnmuteParticipant(target);
                 return;
             }
@@ -1274,7 +1274,7 @@
                 return;
             }
 
-            ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, I don't know the command {0}", Global.repr(sCommand));
+            ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, I don't know the command {0}", ZMBUtils.repr(sCommand));
         }
 
         private static List<IChatBot> chatBots = null;
@@ -1301,11 +1301,11 @@
                 FileInfo[] files = subdir.GetFiles("ZoomMeetingBotSDK.ChatBot.*.dll");
                 if (files.Length > 1)
                 {
-                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {Global.repr(subdir.FullName)}; More than one DLL found");
+                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {ZMBUtils.repr(subdir.FullName)}; More than one DLL found");
                 }
                 else if (files.Length == 0)
                 {
-                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {Global.repr(subdir.FullName)}; No DLL found");
+                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {ZMBUtils.repr(subdir.FullName)}; No DLL found");
                 }
                 else
                 {
@@ -1326,14 +1326,14 @@
                                 {
                                     hostApp = Global.hostApp,
                                 });
-                                Global.hostApp.Log(LogType.DBG, $"Loaded {Global.repr(chatBotInfo.Name)} chatbot with intelligence level {chatBotInfo.IntelligenceLevel}");
+                                Global.hostApp.Log(LogType.DBG, $"Loaded {ZMBUtils.repr(chatBotInfo.Name)} chatbot with intelligence level {chatBotInfo.IntelligenceLevel}");
                                 bots.Add(new Tuple<int, IChatBot>(chatBotInfo.IntelligenceLevel, chatBot));
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Global.hostApp.Log(LogType.ERR, $"Failed to load {Global.repr(file.FullName)}: {Global.repr(ex.ToString())}");
+                        Global.hostApp.Log(LogType.ERR, $"Failed to load {ZMBUtils.repr(file.FullName)}: {ZMBUtils.repr(ex.ToString())}");
                     }
                 }
             }
@@ -1359,7 +1359,7 @@
                     }
                     catch (Exception ex)
                     {
-                        Global.hostApp.Log(LogType.ERR, $"SettingsNotify failed: {Global.repr(ex.ToString())}");
+                        Global.hostApp.Log(LogType.ERR, $"SettingsNotify failed: {ZMBUtils.repr(ex.ToString())}");
                     }
                 }
             }
@@ -1416,13 +1416,13 @@
                     {
                         try
                         {
-                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passing Host to {0}", Global.repr(altHost.name));
+                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passing Host to {0}", ZMBUtils.repr(altHost.name));
                             ZoomMeetingBotSDK.PromoteParticipant(altHost, ZoomMeetingBotSDK.ParticipantRole.Host);
-                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passed Host to {0}", Global.repr(altHost.name));
+                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passed Host to {0}", ZMBUtils.repr(altHost.name));
                         }
                         catch (Exception ex)
                         {
-                            Global.hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Failed to pass Host to {0}; Ending meeting", Global.repr(altHost.name));
+                            Global.hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Failed to pass Host to {0}; Ending meeting", ZMBUtils.repr(altHost.name));
                             endForAll = true;
                         }
                     }
@@ -1453,14 +1453,14 @@
                     gmailSender = new GmailSenderLib.GmailSender(System.Reflection.Assembly.GetCallingAssembly().GetName().Name);
                 }
 
-                Global.hostApp.Log(LogType.ERR, "SendEmail - Sending email to {0} with subject {1}", Global.repr(to), Global.repr(subject));
+                Global.hostApp.Log(LogType.ERR, "SendEmail - Sending email to {0} with subject {1}", ZMBUtils.repr(to), ZMBUtils.repr(subject));
                 gmailSender.Send(new GmailSenderLib.SimpleMailMessage(subject, body, to));
 
                 return true;
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.ERR, "SendEmail - Failed; Exception: {0}", Global.repr(ex.ToString()));
+                Global.hostApp.Log(LogType.ERR, "SendEmail - Failed; Exception: {0}", ZMBUtils.repr(ex.ToString()));
                 return false;
             }
         }

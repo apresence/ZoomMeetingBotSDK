@@ -275,6 +275,7 @@ namespace ZoomMeetingBotSDK
         public static ConfigurationSettings cfg = new ConfigurationSettings();
         public static Dictionary<string, dynamic> cfgDic = new Dictionary<string, dynamic>();
 
+        /*
         public static T DeserializeJson<T>(string json)
         {
             return JsonSerializer.Deserialize<T>(json);
@@ -293,6 +294,7 @@ namespace ZoomMeetingBotSDK
                 throw new FormatException(string.Format("Could not serialize object {0}", o.GetType().Name), ex);
             }
         }
+        */
 
         private static DateTime dtLastSettingsMod = DateTime.MinValue;
 
@@ -408,7 +410,7 @@ namespace ZoomMeetingBotSDK
                     }
                     if (!bFound)
                     {
-                        throw new KeyNotFoundException(string.Format("Description/Name {0} not found in enum {1}", Global.repr(description), Global.repr(type.ToString())));
+                        throw new KeyNotFoundException(string.Format("Description/Name {0} not found in enum {1}", ZMBUtils.repr(description), ZMBUtils.repr(type.ToString())));
                     }
                 }
 

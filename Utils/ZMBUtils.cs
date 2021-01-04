@@ -33,36 +33,33 @@ namespace ZoomMeetingBotSDK.Utils
         /// <summary>
         /// Reference implementation for returning a string representation of an object, similar to Python's native repr() function.
         /// </summary>
-        public static string repr(object o)
+        public static string repr(object obj)
         {
-            if (o is null)
+            if (obj == null)
             {
                 return "(null)";
             }
 
-            var ret = new StringBuilder();
-            var val = o.ToString();
-
-            foreach (char c in val)
+            if (!(obj is Enum))
             {
-                var i = (int)c;
-                if (i <= 32)
+                try
                 {
-                    ret.Append('^');
-                    ret.Append((char)(i + 64));
+                    return (new JavaScriptSerializer()).Serialize(obj);
                 }
-                else if ("^\"\\".Contains(c))
+                catch
                 {
-                    ret.Append('\\');
-                    ret.Append(c);
-                }
-                else
-                {
-                    ret.Append(c);
                 }
             }
 
-            return ret.ToString();
+            try
+            {
+                return obj.ToString();
+            }
+            catch
+            {
+            }
+
+            return "(repr: Failed to convert object " + obj.GetType().ToString() + " to string)";
         }
 
         private static readonly HashSet<string> SkipPropertyNames = new HashSet<string> { "ControlType", "ProcessId", "Orientation" };
