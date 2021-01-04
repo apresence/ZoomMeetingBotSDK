@@ -1,4 +1,4 @@
-﻿namespace ZoomMeetingBotSDK.Utils
+﻿namespace ZoomMeetingBotSDK
 {
     using System;
     using System.Collections.Generic;
@@ -10,7 +10,7 @@
     /// <summary>
     /// We make this class abstract so that some members can be overriden with more tailored implementations.
     /// </summary>
-    public class ZMBUtils
+    public class Utils
     {
         public static readonly char[] CRLFDelim = new char[] { '\r', '\n' };
 

@@ -14,9 +14,8 @@
     using System.Windows;
     using System.Windows.Automation;
     using System.Windows.Forms;
-    using global::ZoomMeetingBotSDK.Interop.HostApp;
-    using global::ZoomMeetingBotSDK.Utils;
-    using static Utils.ZMBUtils;
+
+    using static Utils;
 
     internal class Controller
     {

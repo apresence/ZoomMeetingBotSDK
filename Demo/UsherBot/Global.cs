@@ -7,8 +7,7 @@
     using System.IO;
     using System.Text.Json;
     using System.Threading;
-    using global::ZoomMeetingBotSDK.Interop.HostApp;
-    using static Utils.ZMBUtils;
+    using static Utils;
 
     public class Global
     {
@@ -104,7 +103,7 @@
             /// <summary>
             /// Sets the gender of the Bot.
             /// </summary>
-            public Interop.ChatBot.Gender BotGender { get; set; }
+            public ChatBot.Gender BotGender { get; set; }
 
             /// <summary>
             /// ID of the meeting to join.
@@ -242,7 +241,7 @@
                 UnknownParticipantWaitSecs = 30;
                 MyParticipantName = "ZoomBot";
                 BotAutomationFlags = BotAutomationFlag.All;
-                BotGender = Interop.ChatBot.Gender.Female;
+                BotGender = ChatBot.Gender.Female;
                 MeetingID = null;
                 BroadcastCommands = new Dictionary<string, string>();
                 BroadcastCommandGuardTimeSecs = 300;

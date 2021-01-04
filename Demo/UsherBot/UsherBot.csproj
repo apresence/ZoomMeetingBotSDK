@@ -36,7 +36,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\bin\Debug\</OutputPath>
+    <OutputPath>..\..\bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -140,6 +140,14 @@
     <Reference Include="UIAutomationClient" />
     <Reference Include="UIAutomationTypes" />
     <Reference Include="WindowsBase" />
+    <Reference Include="ZoomMeetingBotSDK, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\bin\Debug\ZoomMeetingBotSDK.dll</HintPath>
+    </Reference>
+    <Reference Include="ZoomMeetingBotSDK.Sound, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\bin\Debug\ZoomMeetingBotSDK.Sound.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Global.cs" />
@@ -149,7 +157,6 @@
     <Compile Include="UIATools.cs" />
     <Compile Include="WindowTools.cs" />
     <Compile Include="Controller.cs" />
-    <Compile Include="SceneSnap.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
@@ -180,18 +187,6 @@
     <ProjectReference Include="..\GmailSender\GmailSenderLib\GmailSenderLib.csproj">
       <Project>{340b0e7f-3542-4527-9473-e4a5a31188f1}</Project>
       <Name>GmailSenderLib</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Interop\ZoomMeetingBotSDK.Interop.csproj">
-      <Project>{49f30735-cb2a-46f6-8a58-11a6154cb30d}</Project>
-      <Name>ZoomMeetingBotSDK.Interop</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Utils\ZoomMeetingBotSDK.Utils.csproj">
-      <Project>{6e75e9ff-16f0-42b8-bbd8-ee25b9f52e0e}</Project>
-      <Name>ZoomMeetingBotSDK.Utils</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Sound\ZoomMeetingBotSDK.Sound.csproj">
-      <Project>{b8bf3636-96e4-45df-b5ae-bf5ad730b862}</Project>
-      <Name>ZoomMeetingBotSDK.Sound</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

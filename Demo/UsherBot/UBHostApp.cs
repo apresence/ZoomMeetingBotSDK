@@ -5,8 +5,7 @@
     using System.IO;
     using System.Text;
     using System.Threading;
-    using global::ZoomMeetingBotSDK.Interop.HostApp;
-    using static Utils.ZMBUtils;
+    using static Utils;
 
     public class UBHostApp : CHostApp
     {

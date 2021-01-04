@@ -1,7 +1,5 @@
-﻿namespace ZoomMeetingBotSDK.Interop.ChatBot
+﻿namespace ZoomMeetingBotSDK.ChatBot
 {
-    using ZoomMeetingBotSDK.Interop.HostApp;
-
     public enum Gender
     {
         Neutral = 0,

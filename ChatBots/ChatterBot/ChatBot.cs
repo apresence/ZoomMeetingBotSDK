@@ -2,9 +2,8 @@
 {
     using System;
     using System.Diagnostics;
-    using ZoomMeetingBotSDK.Interop.HostApp;
-    using ZoomMeetingBotSDK.Interop.ChatBot;
-    using static ZoomMeetingBotSDK.Utils.ZMBUtils;
+    using ZoomMeetingBotSDK;
+    using static Utils;
 
     /// <summary>
     /// This is an extremly simple/naive wrapper around chatbot.py which is a wrapper for chatterbot in Python.  Feel free to re-write it.

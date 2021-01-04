@@ -7,10 +7,8 @@
     using System.Reflection;
     using System.Text.RegularExpressions;
     using System.Threading;
-    using global::ZoomMeetingBotSDK.Interop.ChatBot;
-    using global::ZoomMeetingBotSDK.Interop.HostApp;
-    using global::ZoomMeetingBotSDK.Utils;
-    using static Utils.ZMBUtils;
+    using static Utils;
+    using ChatBot;
 
     internal class UsherBot
     {

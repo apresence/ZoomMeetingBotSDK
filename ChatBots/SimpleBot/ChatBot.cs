@@ -1,9 +1,7 @@
 ﻿namespace ZoomMeetingBotSDK.ChatBot.SimpleBot
 {
     using System.Collections.Generic;
-    using ZoomMeetingBotSDK.Interop.HostApp;
-    using ZoomMeetingBotSDK.Interop.ChatBot;
-    using ZoomMeetingBotSDK.Utils;
+//    using ZoomMeetingBotSDK.Utils;
 
     public class ChatBot : IChatBot
     {

@@ -1,4 +1,4 @@
-﻿namespace ZoomMeetingBotSDK.Utils
+﻿namespace ZoomMeetingBotSDK
 {
     using System;
     using System.Security.Cryptography;

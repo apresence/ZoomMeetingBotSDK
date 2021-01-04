@@ -117,9 +117,7 @@ namespace ZoomMeetingBotSDK
     using System.Threading.Tasks;
     using System.Windows.Automation;
     using System.Windows.Forms;
-    using global::ZoomMeetingBotSDK.Interop.HostApp;
-    using global::ZoomMeetingBotSDK.Utils;
-    using static Utils.ZMBUtils;
+    using static Utils;
 
     internal class Program
     {

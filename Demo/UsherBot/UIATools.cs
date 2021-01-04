@@ -5,8 +5,7 @@
     using System.Text;
     using System.Windows.Automation;
     using System.Windows.Forms;
-    using global::ZoomMeetingBotSDK.Interop.HostApp;
-    using static Utils.ZMBUtils;
+    using static Utils;
 
     internal class UIATools
     {

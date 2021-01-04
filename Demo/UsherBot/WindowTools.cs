@@ -14,8 +14,7 @@ namespace ZoomMeetingBotSDK
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Windows.Forms;
-    using global::ZoomMeetingBotSDK.Interop.HostApp;
-    using static Utils.ZMBUtils;
+    using static Utils;
 
 
     /*

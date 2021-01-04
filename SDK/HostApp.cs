@@ -1,4 +1,4 @@
-﻿namespace ZoomMeetingBotSDK.Interop.HostApp
+﻿namespace ZoomMeetingBotSDK
 {
     using System;
     using System.Diagnostics;

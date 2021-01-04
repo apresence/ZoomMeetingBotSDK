@@ -1,10 +1,10 @@
-﻿namespace ZoomMeetingBotSDK.Utils
+﻿namespace ZoomMeetingBotSDK
 {
     using System.Linq;
     using System.Collections.Generic;
     using System.Globalization;
     using System.Text.RegularExpressions;
-    using static ZMBUtils;
+    using static Utils;
 
     public static class StringExtensions
     {
