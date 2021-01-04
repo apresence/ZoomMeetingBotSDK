@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 
-namespace ZoomMeetngBotSDK.Utils
+namespace ZoomMeetingBotSDK.Utils
 {
     /// <summary>
     /// We make this class abstract so that some members can be overriden with more tailored implementations.
@@ -15,13 +15,9 @@ namespace ZoomMeetngBotSDK.Utils
     {
         public static readonly char[] CRLFDelim = new char[] { '\r', '\n' };
 
-        public class JsonDictionary : Dictionary<string, dynamic>
-        {
-        }
-
         private static JavaScriptSerializer serializer = null;
 
-        public static JsonDictionary JsonToDict(string json)
+        public static Dictionary<string, dynamic> JsonToDict(string json)
         {
             if (serializer == null)
             {
@@ -30,7 +26,7 @@ namespace ZoomMeetngBotSDK.Utils
 
             lock (serializer)
             {
-                return (JsonDictionary)serializer.DeserializeObject(json);
+                return (Dictionary<string, dynamic>)serializer.DeserializeObject(json);
             }
         }
 

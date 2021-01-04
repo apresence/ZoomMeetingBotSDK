@@ -1,4 +1,4 @@
-﻿namespace ZoomMeetngBotSDK
+﻿namespace ZoomMeetingBotSDK
 {
     using System;
     using System.CodeDom;
@@ -20,10 +20,10 @@
     using System.Windows;
     using System.Windows.Automation;
     using System.Windows.Forms;
-    using global::ZoomMeetngBotSDK.Interop.HostApp;
-    using global::ZoomMeetngBotSDK.Utils;
+    using global::ZoomMeetingBotSDK.Interop.HostApp;
+    using global::ZoomMeetingBotSDK.Utils;
 
-    internal class ZoomMeetngBotSDK
+    internal class ZoomMeetingBotSDK
     {
         public enum MeetingOption
         {
@@ -424,7 +424,7 @@
                         this.lastEventKey = sHash;
 
                         // Unexpected/unwanted dialog box squasher - Prompting for audio, host wants you to unmute, etc.
-                        if ((aei.ControlType == ControlType.Window) && (aei.ClassName == "zChangeNameWndClass") && (!ZoomMeetngBotSDK.bWaitingForChangeNameDialog))
+                        if ((aei.ControlType == ControlType.Window) && (aei.ClassName == "zChangeNameWndClass") && (!ZoomMeetingBotSDK.bWaitingForChangeNameDialog))
                         {
                             Global.hostApp.Log(LogType.WRN, "Closing unexpected dialog 0x{0:X8} {1}", (uint)aei.NativeWindowHandle, UIATools.AEToString(ae));
                             WindowTools.CloseWindow((IntPtr)aei.NativeWindowHandle);
@@ -454,7 +454,7 @@
                             return;
                         }
 
-                        var evt = new ZoomMeetngBotSDK.UIEvent
+                        var evt = new ZoomMeetingBotSDK.UIEvent
                         {
                             e = e.EventId,
                             ae = ae,
@@ -1580,7 +1580,7 @@
 
             // TBD: This isn't really the right spot for this ...
             // Dialog squasher: Close any unexpected dialog boxes
-            var hUnexpectedDialog = WindowTools.FindWindowByClass(ZoomMeetngBotSDK.SZoomRenameWindowClass);
+            var hUnexpectedDialog = WindowTools.FindWindowByClass(ZoomMeetingBotSDK.SZoomRenameWindowClass);
             if (hUnexpectedDialog != IntPtr.Zero)
             {
                 var ae = AutomationElement.FromHandle(hUnexpectedDialog);
@@ -1816,7 +1816,7 @@
 
             bool bChanged = false;
 
-            Dictionary<string, ZoomMeetngBotSDK.Participant> oldList = ZoomMeetngBotSDK.participants;
+            Dictionary<string, ZoomMeetingBotSDK.Participant> oldList = ZoomMeetingBotSDK.participants;
 
             // === PARSE MEETING PARTICIPANTS ===
 
@@ -2007,7 +2007,7 @@
                 }
             }
 
-            //Dictionary<string, ZoomMeetngBotSDK.Participant> newList = new Dictionary<string, ZoomMeetngBotSDK.Participant>(ZoomMeetngBotSDK.participants);
+            //Dictionary<string, ZoomMeetingBotSDK.Participant> newList = new Dictionary<string, ZoomMeetingBotSDK.Participant>(ZoomMeetingBotSDK.participants);
             Global.hostApp.Log(LogType.DBG, "UpdateParticipants - Exit");
             return bChanged;
         }
@@ -2949,7 +2949,7 @@
                     WindowTools.SendKeys(hZoom, "{ENTER}");
 
                     // Wait for zoom meeting window
-                    return ZoomMeetngBotSDK.WaitZoomMeetingWindow(out _);
+                    return ZoomMeetingBotSDK.WaitZoomMeetingWindow(out _);
                 }
                 catch (Exception ex)
                 {
@@ -3048,7 +3048,7 @@
                     //WindowTools.SendKeys(hChrome, "{TAB}{ENTER}");
                     WindowTools.SendKeys(hChrome, "+{TAB}{ENTER}");
 
-                    return ZoomMeetngBotSDK.WaitZoomMeetingWindow(out _);
+                    return ZoomMeetingBotSDK.WaitZoomMeetingWindow(out _);
                 }
                 catch (Exception ex)
                 {
@@ -3088,7 +3088,7 @@
             hZoomMainWindow = IntPtr.Zero;
             try
             {
-                hZoomMainWindow = ZoomMeetngBotSDK.GetZoomMeetingWindowHandle();
+                hZoomMainWindow = ZoomMeetingBotSDK.GetZoomMeetingWindowHandle();
             }
             catch
             {
@@ -3359,7 +3359,7 @@
 
         private static void TestChat()
         {
-            var hChatWnd = ZoomMeetngBotSDK.GetChatPanelWindowHandle();
+            var hChatWnd = ZoomMeetingBotSDK.GetChatPanelWindowHandle();
             var aeChatWnd = AutomationElement.FromHandle(hChatWnd);
 
             var aeChatEdit = aeChatWnd.FindFirst(

@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using ZoomMeetngBotSDK.Utils;
+using ZoomMeetingBotSDK.Utils;
 
-namespace ZoomMeetngBotSDK
+namespace ZoomMeetingBotSDK
 {
     public static class StringExtensions
     {

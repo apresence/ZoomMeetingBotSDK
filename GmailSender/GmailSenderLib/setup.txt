@@ -1,6 +1,6 @@
 https://developers.google.com/gmail/api/quickstart/dotnet
 * Enable GMail API
-  * Project Name: ZoomMeetngBotSDK
+  * Project Name: ZoomMeetingBotSDK
   * OAuth client: Desktop app
   * Click "DOWNLOAD CLIENT CONFIGURATION"
 * Install-Package Google.Apis.Gmail.v1

@@ -1,9 +1,11 @@
-﻿namespace ZoomMeetngBotSDK
+﻿namespace ZoomMeetingBotSDK
 {
     using System;
+    using System.Collections.Generic;
     using System.IO;
     using System.Threading;
-    using global::ZoomMeetngBotSDK.Interop.HostApp;
+    using global::ZoomMeetingBotSDK.Interop.HostApp;
+    using global::ZoomMeetingBotSDK.Utils;
 
     public class UBHostApp : IHostApp
     {
@@ -12,33 +14,38 @@
 
         dynamic IHostApp.GetSetting(string key)
         {
-            if (key.StartsWith("broadcast."))
+            Global.cfgDic.TryGetValue(key, out dynamic obj);
+
+            if (obj is null)
             {
-                string value = null;
-
-                try
-                {
-                    return Global.cfg.BroadcastCommands[key.Split(DotSep, 2)[1]];
-                }
-                catch
-                {
-                    // pass
-                }
-
-                return value;
+                return obj;
             }
 
-            switch (key)
+            if (obj is object[])
             {
-                case "bot.name":
-                    return Global.cfg.MyParticipantName;
-                case "bot.gender":
-                    return Global.cfg.BotGender;
+                var ret = new List<string>();
+                foreach (var item in obj)
+                {
+                    ret.Add(Convert.ToString(item));
+                }
+
+                return ret;
             }
 
-            ((IHostApp)this).Log(LogType.WRN, $"HostApp.GetSetting: Setting with key {Global.repr(key)} does not exist");
+            if (obj is Dictionary<string, object>)
+            {
+                var ret = new Dictionary<string, string>();
+                foreach (var kvp in obj)
+                {
+                    ret.Add(kvp.Key, Convert.ToString(kvp.Value));
+                }
 
-            return null;
+                ZMBUtils.ExpandDictionaryPipes(ret);
+
+                return ret;
+            }
+
+            return obj;
         }
 
         void IHostApp.Log(Interop.HostApp.LogType nLogType, string sMessage, params object[] values)

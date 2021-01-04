@@ -8,10 +8,10 @@ using System.Collections.Concurrent;
 using System.Security.AccessControl;
 using System.IO;
 using System.Media;
-using ZoomMeetngBotSDK.Interop.HostApp;
-using global::ZoomMeetngBotSDK.Utils;
+using ZoomMeetingBotSDK.Interop.HostApp;
+using global::ZoomMeetingBotSDK.Utils;
 
-namespace ZoomMeetngBotSDK
+namespace ZoomMeetingBotSDK
 {
     public static class Sound
     {
@@ -37,7 +37,7 @@ namespace ZoomMeetngBotSDK
         {
             if (hostApp != null)
             {
-                hostApp.Log(LogType.WRN, "ZoomMeetngBotSDK.Sound: Already Initialized");
+                hostApp.Log(LogType.WRN, "ZoomMeetingBotSDK.Sound: Already Initialized");
                 return;
             }
 

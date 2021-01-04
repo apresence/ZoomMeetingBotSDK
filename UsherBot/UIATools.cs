@@ -1,12 +1,12 @@
-﻿namespace ZoomMeetngBotSDK
+﻿namespace ZoomMeetingBotSDK
 {
     using System;
     using System.Collections.Generic;
     using System.Text;
     using System.Windows.Automation;
     using System.Windows.Forms;
-    using global::ZoomMeetngBotSDK.Interop.HostApp;
-    using global::ZoomMeetngBotSDK.Utils;
+    using global::ZoomMeetingBotSDK.Interop.HostApp;
+    using global::ZoomMeetingBotSDK.Utils;
 
     internal class UIATools
     {

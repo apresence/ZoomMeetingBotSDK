@@ -1,4 +1,4 @@
-﻿namespace ZoomMeetngBotSDK
+﻿namespace ZoomMeetingBotSDK
 {
     using System;
     using System.Drawing;

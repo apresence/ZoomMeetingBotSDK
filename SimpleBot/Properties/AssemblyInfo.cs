@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ZoomMeetingBotSDK.ChatBots.ChatterBot")]
+[assembly: AssemblyTitle("ZoomMeetingBotSDK.ChatBot.SimpleBot")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("ZoomMeetingBotSDK.ChatBots.ChatterBot")]
-[assembly: AssemblyCopyright("Copyright ©  2020")]
+[assembly: AssemblyProduct("ZoomMeetingBotSDK.ChatBot.SimpleBot")]
+[assembly: AssemblyCopyright("Copyright ©  2021")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("cc913e5a-5ee4-4b4a-9a21-cad10cd658d4")]
+[assembly: Guid("b1f7ed28-9fc5-4243-8b86-7804ac48705b")]
 
 // Version information for an assembly consists of the following four values:
 //

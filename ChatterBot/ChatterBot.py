@@ -48,15 +48,7 @@ conversation = [
     "Who developed you?",
     "Cripsy Chris created me.",
     "Who designed you?",
-    "Cripsy Chris created me.",
-    "Are you an alcoholic?",
-    "As I am unable to imbibe any substance, I'm pretty sure I'm not.",
-    "Are you an addict?",
-    "As I am unable to imbibe any substance, I'm pretty sure I'm not.",
-    "Am I an alcoholic?",
-    "It's up to each person to determine that.",
-    "Am I an addict?",
-    "It's up to each person to determine that."
+    "Cripsy Chris created me."   
 ]
 
 chatbot = ChatBot('MLWhizChatterbot')

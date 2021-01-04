@@ -5,7 +5,7 @@
 ///
 /// In other words: This class needs a serious re-write!
 /// </summary>
-namespace ZoomMeetngBotSDK
+namespace ZoomMeetingBotSDK
 {
     using System;
     using System.Collections.Generic;
@@ -17,7 +17,7 @@ namespace ZoomMeetngBotSDK
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Windows.Forms;
-    using global::ZoomMeetngBotSDK.Interop.HostApp;
+    using global::ZoomMeetingBotSDK.Interop.HostApp;
 
     /*
     public static class ProcessExtensions

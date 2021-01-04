@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ZoomMeetngBotSDK.Interop.HostApp
+namespace ZoomMeetingBotSDK.Interop.HostApp
 {
     public enum LogType
     {
@@ -22,7 +22,7 @@ namespace ZoomMeetngBotSDK.Interop.HostApp
         dynamic GetSetting(string key);
     }
 
-    public abstract class HostApp : IHostApp
+    public abstract class SimpleHostApp : IHostApp
     {
         // Provide a lock across all instances of this object.
         private static readonly object logLock = new object();

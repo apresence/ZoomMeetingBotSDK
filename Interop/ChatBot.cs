@@ -1,6 +1,6 @@
-﻿using ZoomMeetngBotSDK.Interop.HostApp;
+﻿using ZoomMeetingBotSDK.Interop.HostApp;
 
-namespace ZoomMeetngBotSDK.Interop.ChatBot
+namespace ZoomMeetingBotSDK.Interop.ChatBot
 {
     public enum Gender
     {
@@ -39,6 +39,11 @@ namespace ZoomMeetngBotSDK.Interop.ChatBot
         /// </summary>
         /// <param name="param"></param>
         void Start(ChatBotInitParam param);
+
+        /// <summary>
+        /// Called when configuration settings have been updated. The bot should reload any settings it needs in order to pick up changes.
+        /// </summary>
+        void SettingsUpdated();
 
         /// <summary>
         /// Called once the bot will no longer be used.

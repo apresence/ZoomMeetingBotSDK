@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <ClassDiagram MajorVersion="1" MinorVersion="1">
-  <Class Name="ZoomMeetngBotSDK.ZoomMeetngBotSDK" Collapsed="true">
+  <Class Name="ZoomMeetingBotSDK.ZoomMeetingBotSDK" Collapsed="true">
     <Position X="0.5" Y="0.5" Width="1.5" />
     <TypeIdentifier>
       <HashCode>EAM4KIYBO+CLDa0USEGE8yXNhrJoYxRC9HA8GgQgAxg=</HashCode>

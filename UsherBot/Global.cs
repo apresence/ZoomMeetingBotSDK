@@ -9,10 +9,11 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
-using ZoomMeetngBotSDK.Interop.HostApp;
-using ZoomMeetngBotSDK.Utils;
+using ZoomMeetingBotSDK.Interop.HostApp;
+using ZoomMeetingBotSDK.Utils;
+using static ZoomMeetingBotSDK.Utils.ZMBUtils;
 
-namespace ZoomMeetngBotSDK
+namespace ZoomMeetingBotSDK
 {
     public class Global
     {
@@ -209,7 +210,7 @@ namespace ZoomMeetngBotSDK
             public string TTSVoice { get; set; }
 
             /// <summary>
-            /// Configures which display should be used to run Zoom, ZoomMeetngBotSDK, UsherBot, etc.  The default is whichever display is set as the "main" screen
+            /// Configures which display should be used to run Zoom, ZoomMeetingBotSDK, UsherBot, etc.  The default is whichever display is set as the "main" screen
             /// </summary>
             public string Screen { get; set; }
 
@@ -235,9 +236,9 @@ namespace ZoomMeetngBotSDK
             public string ZoomPassword { get; set; }
 
             public ConfigurationSettings()
-            {                
+            {
                 BrowserExecutable = @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe";
-                BrowserArguments = "https://zoom.us/signin";                
+                BrowserArguments = "https://zoom.us/signin";
                 DebugLoggingEnabled = false;
                 IsPaused = false;
                 PromptOnStartup = false;
@@ -272,6 +273,7 @@ namespace ZoomMeetngBotSDK
         }
 
         public static ConfigurationSettings cfg = new ConfigurationSettings();
+        public static Dictionary<string, dynamic> cfgDic = new Dictionary<string, dynamic>();
 
         public static T DeserializeJson<T>(string json)
         {
@@ -316,11 +318,15 @@ namespace ZoomMeetngBotSDK
 
             hostApp.Log(LogType.INF, "(Re-)loading settings.json");
 
-            cfg = JsonSerializer.Deserialize<ConfigurationSettings>(File.ReadAllText(@"settings.json"));
+            var json = File.ReadAllText(@"settings.json");
+            cfg = JsonSerializer.Deserialize<ConfigurationSettings>(json);
+            cfgDic = JsonToDict(json);
 
             ZMBUtils.ExpandDictionaryPipes(cfg.BroadcastCommands);
             ZMBUtils.ExpandDictionaryPipes(cfg.OneTimeHiSequences);
             ZMBUtils.ExpandDictionaryPipes(cfg.SmallTalkSequences);
+
+            UsherBot.SettingsUpdated();
         }
 
         public static void SaveSettings()
