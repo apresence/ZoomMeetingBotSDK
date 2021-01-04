@@ -121,6 +121,7 @@ namespace ZoomMeetingBotSDK
     using System.Windows.Forms;
     using System.Windows.Input;
     using global::ZoomMeetingBotSDK.Interop.HostApp;
+    using global::ZoomMeetingBotSDK.Utils;
 
     internal class Program
     {
@@ -300,7 +301,7 @@ namespace ZoomMeetingBotSDK
                     {
                         var keyInfo = Console.ReadKey();
 
-                        Console.WriteLine("CONSOLE : === ReadKey {0}, {1}, {2} ===", Global.repr(keyInfo.KeyChar), keyInfo.Key.ToString(), "{" + keyInfo.Modifiers.ToString() + "}");
+                        Console.WriteLine("CONSOLE : === ReadKey {0}, {1}, {2} ===", ZMBUtils.repr(keyInfo.KeyChar), keyInfo.Key.ToString(), "{" + keyInfo.Modifiers.ToString() + "}");
                         if (keyInfo.Modifiers == 0)
                         {
                             var ch = keyInfo.KeyChar;
