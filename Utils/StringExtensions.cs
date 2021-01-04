@@ -1,11 +1,11 @@
-﻿using System.Linq;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text.RegularExpressions;
-using ZoomMeetingBotSDK.Utils;
-
-namespace ZoomMeetingBotSDK
+﻿namespace ZoomMeetingBotSDK.Utils
 {
+    using System.Linq;
+    using System.Collections.Generic;
+    using System.Globalization;
+    using System.Text.RegularExpressions;
+    using static ZMBUtils;
+
     public static class StringExtensions
     {
         private static readonly TextInfo TextInfo = new CultureInfo("en-US", false).TextInfo;
@@ -86,7 +86,7 @@ namespace ZoomMeetingBotSDK
         /// </summary>
         public static string StripBlankLinesAndTrimSpace(this string s)
         {
-            var lines = s.Split(ZMBUtils.CRLFDelim);
+            var lines = s.Split(CRLFDelim);
             var ret = new List<string>();
             foreach (var line in lines)
             {

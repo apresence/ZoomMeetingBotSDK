@@ -1,11 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ZoomMeetingBotSDK
+﻿namespace ZoomMeetingBotSDK.Utils
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+
     public static class IEnumerableExtensions
     {
         public static T RandomElementUsing<T>(this IEnumerable<T> enumerable, Random rand)

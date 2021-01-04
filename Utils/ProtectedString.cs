@@ -1,9 +1,9 @@
-﻿using System;
-using System.Security.Cryptography;
-using System.Text;
-
-namespace ZoomMeetingBotSDK
+﻿namespace ZoomMeetingBotSDK.Utils
 {
+    using System;
+    using System.Security.Cryptography;
+    using System.Text;
+
     /// <summary>
     /// Provides a facility to encrypt/decrypt a string using C#'s ProtectedData class which depends on Windows' native DPAPI.
     /// The encyrption/decryption is only good for the current Windows machine.  More info here:

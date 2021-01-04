@@ -112,16 +112,14 @@ namespace ZoomMeetingBotSDK
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
-    using System.Runtime.InteropServices;
-    using System.Security;
     using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
     using System.Windows.Automation;
     using System.Windows.Forms;
-    using System.Windows.Input;
     using global::ZoomMeetingBotSDK.Interop.HostApp;
     using global::ZoomMeetingBotSDK.Utils;
+    using static Utils.ZMBUtils;
 
     internal class Program
     {
@@ -272,8 +270,8 @@ namespace ZoomMeetingBotSDK
                     {
                         WindowTools.WakeScreen();
 
-                        ZoomMeetingBotSDK.CalcWindowLayout();
-                        WindowTools.SetWindowSize(Process.GetCurrentProcess().MainWindowHandle, ZoomMeetingBotSDK.AppRect);
+                        Controller.CalcWindowLayout();
+                        WindowTools.SetWindowSize(Process.GetCurrentProcess().MainWindowHandle, Controller.AppRect);
 
                         if (Global.cfg.WaitForDebuggerAttach)
                         {
@@ -301,7 +299,7 @@ namespace ZoomMeetingBotSDK
                     {
                         var keyInfo = Console.ReadKey();
 
-                        Console.WriteLine("CONSOLE : === ReadKey {0}, {1}, {2} ===", ZMBUtils.repr(keyInfo.KeyChar), keyInfo.Key.ToString(), "{" + keyInfo.Modifiers.ToString() + "}");
+                        Console.WriteLine("CONSOLE : === ReadKey {0}, {1}, {2} ===", repr(keyInfo.KeyChar), keyInfo.Key.ToString(), "{" + keyInfo.Modifiers.ToString() + "}");
                         if (keyInfo.Modifiers == 0)
                         {
                             var ch = keyInfo.KeyChar;
@@ -310,9 +308,9 @@ namespace ZoomMeetingBotSDK
                                 Console.WriteLine("CONSOLE : === BEGIN AETree Enum ===");
                                 var handles = new List<(IntPtr h, string name)>
                                 {
-                                    (ZoomMeetingBotSDK.GetZoomMeetingWindowHandle(), "Main"),
-                                    (ZoomMeetingBotSDK.GetParticipantsPanelWindowHandle(), "Paticipants"),
-                                    (ZoomMeetingBotSDK.GetChatPanelWindowHandle(), "Chat"),
+                                    (Controller.GetZoomMeetingWindowHandle(), "Main"),
+                                    (Controller.GetParticipantsPanelWindowHandle(), "Paticipants"),
+                                    (Controller.GetChatPanelWindowHandle(), "Chat"),
                                 };
                                 AutomationElement ae;
                                 foreach (var (h, name) in handles)

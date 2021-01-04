@@ -181,13 +181,13 @@
       <Project>{340b0e7f-3542-4527-9473-e4a5a31188f1}</Project>
       <Name>GmailSenderLib</Name>
     </ProjectReference>
-    <ProjectReference Include="..\Utils\ZoomMeetingBotSDK.Utils.csproj">
-      <Project>{6e75e9ff-16f0-42b8-bbd8-ee25b9f52e0e}</Project>
-      <Name>ZoomMeetingBotSDK.Utils</Name>
-    </ProjectReference>
     <ProjectReference Include="..\Interop\ZoomMeetingBotSDK.Interop.csproj">
       <Project>{49f30735-cb2a-46f6-8a58-11a6154cb30d}</Project>
       <Name>ZoomMeetingBotSDK.Interop</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Utils\ZoomMeetingBotSDK.Utils.csproj">
+      <Project>{6e75e9ff-16f0-42b8-bbd8-ee25b9f52e0e}</Project>
+      <Name>ZoomMeetingBotSDK.Utils</Name>
     </ProjectReference>
     <ProjectReference Include="..\Sound\ZoomMeetingBotSDK.Sound.csproj">
       <Project>{b8bf3636-96e4-45df-b5ae-bf5ad730b862}</Project>

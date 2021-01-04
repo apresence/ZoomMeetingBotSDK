@@ -6,7 +6,7 @@
     using System.Windows.Automation;
     using System.Windows.Forms;
     using global::ZoomMeetingBotSDK.Interop.HostApp;
-    using global::ZoomMeetingBotSDK.Utils;
+    using static Utils.ZMBUtils;
 
     internal class UIATools
     {
@@ -46,10 +46,10 @@
                 //   aei.Orientation            Always 0
 
                 l.Add(aei.ControlType.ProgrammaticName.Split('.')[1]);
-                l.Add(ZMBUtils.repr(aei.Name));
+                l.Add(repr(aei.Name));
                 if ((aei.AutomationId != null) && (aei.AutomationId.Length > 0))
                 {
-                    l.Add("AutomationId:" + ZMBUtils.repr(aei.AutomationId));
+                    l.Add("AutomationId:" + repr(aei.AutomationId));
                 }
 
                 if (!aei.BoundingRectangle.IsEmpty)
@@ -74,12 +74,12 @@
 
                 if ((aei.AccessKey != null) && (aei.AccessKey.Length > 0))
                 {
-                    l.Add("AccessKey:" + ZMBUtils.repr(aei.AccessKey));
+                    l.Add("AccessKey:" + repr(aei.AccessKey));
                 }
 
                 if ((aei.ClassName != null) && (aei.ClassName.Length > 0))
                 {
-                    l.Add("ClassName:" + ZMBUtils.repr(aei.ClassName));
+                    l.Add("ClassName:" + repr(aei.ClassName));
                 }
 
                 if (aei.NativeWindowHandle != 0)
@@ -103,7 +103,7 @@
                     l.Add("patterns:[" + string.Join(",", p) + "]");
                 }
 
-                l.Add("rids:" + ZMBUtils.repr(ae.GetRuntimeId()));
+                l.Add("rids:" + repr(ae.GetRuntimeId()));
 
                 return string.Join(" ", l);
             }
@@ -127,7 +127,7 @@
 
         public static void LogSupportedPatterns(AutomationElement ae)
         {
-            Global.hostApp.Log(LogType.DBG, "Supported patterns for {0} {1}:", ZMBUtils.repr(ae.Current.LocalizedControlType), ZMBUtils.repr(ae.Current.Name));
+            Global.hostApp.Log(LogType.DBG, "Supported patterns for {0} {1}:", repr(ae.Current.LocalizedControlType), repr(ae.Current.Name));
 
             List<string> l = new List<string>();
 
@@ -145,7 +145,7 @@
             var nodeAttendee = TreeWalker.ContentViewWalker.GetNextSibling(ae);
             while (nodeAttendee != null)
             {
-                Global.hostApp.Log(LogType.DBG, "  {0}", ZMBUtils.GetObjStrs(nodeAttendee.Current));
+                Global.hostApp.Log(LogType.DBG, "  {0}", GetObjStrs(nodeAttendee.Current));
                 LogSupportedPatterns(nodeAttendee);
                 nodeAttendee = TreeWalker.RawViewWalker.GetNextSibling(nodeAttendee);
             }
@@ -157,7 +157,7 @@
             var nodeAttendee = TreeWalker.ContentViewWalker.GetFirstChild(ae);
             while (nodeAttendee != null)
             {
-                Global.hostApp.Log(LogType.DBG, "  {0}", ZMBUtils.GetObjStrs(nodeAttendee.Current));
+                Global.hostApp.Log(LogType.DBG, "  {0}", GetObjStrs(nodeAttendee.Current));
                 LogSupportedPatterns(nodeAttendee);
                 nodeAttendee = TreeWalker.RawViewWalker.GetNextSibling(nodeAttendee);
             }

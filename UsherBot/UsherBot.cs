@@ -2,8 +2,6 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics.CodeAnalysis;
-    using System.Drawing.Imaging;
     using System.IO;
     using System.Linq;
     using System.Reflection;
@@ -12,6 +10,7 @@
     using global::ZoomMeetingBotSDK.Interop.ChatBot;
     using global::ZoomMeetingBotSDK.Interop.HostApp;
     using global::ZoomMeetingBotSDK.Utils;
+    using static Utils.ZMBUtils;
 
     internal class UsherBot
     {
@@ -160,7 +159,7 @@
                 response = topic;
             }
 
-            ZoomMeetingBotSDK.SendChatMessage(recipient, response);
+            Controller.SendChatMessage(recipient, response);
 
             return true;
         }
@@ -187,8 +186,8 @@
             }
 
             //ZoomMeetingBotSDK.SendQueuedChatMessages();
-            _ = ZoomMeetingBotSDK.UpdateChat();
-            ZoomMeetingBotSDK.SendQueuedChatMessages();
+            _ = Controller.UpdateChat();
+            Controller.SendQueuedChatMessages();
         }
 
         private static readonly HashSet<string> HsParticipantMessages = new HashSet<string>();
@@ -201,46 +200,46 @@
                 return;
             }
 
-            _ = ZoomMeetingBotSDK.UpdateParticipants();
+            _ = Controller.UpdateParticipants();
 
-            if (ZoomMeetingBotSDK.me != null)
+            if (Controller.me != null)
             {
                 // If I've got my own participant object, do any self-automation needed
 
-                if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.ReclaimHost) != 0) && (ZoomMeetingBotSDK.me.role != ZoomMeetingBotSDK.ParticipantRole.Host))
+                if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.ReclaimHost) != 0) && (Controller.me.role != Controller.ParticipantRole.Host))
                 {
                     // TBD: Throttle ReclaimHost attempts?
-                    if (ZoomMeetingBotSDK.me.role == ZoomMeetingBotSDK.ParticipantRole.CoHost)
+                    if (Controller.me.role == Controller.ParticipantRole.CoHost)
                     {
                         Global.hostApp.Log(LogType.WRN, "BOT I'm Co-Host instead of Host; Trying to reclaim host");
                     }
-                    else if (ZoomMeetingBotSDK.me.role == ZoomMeetingBotSDK.ParticipantRole.None)
+                    else if (Controller.me.role == Controller.ParticipantRole.None)
                     {
                         Global.hostApp.Log(LogType.WRN, "BOT I'm not Host or Co-Host; Trying to reclaim host");
                     }
-                    ZoomMeetingBotSDK.ReclaimHost();
+                    Controller.ReclaimHost();
                 }
 
-                if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.RenameMyself) != 0) && (ZoomMeetingBotSDK.me.name != Global.cfg.MyParticipantName))
+                if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.RenameMyself) != 0) && (Controller.me.name != Global.cfg.MyParticipantName))
                 {
                     // Rename myself.  Event handler will type in the name when the dialog pops up
-                    Global.hostApp.Log(LogType.INF, "BOT Renaming myself from {0} to {1}", ZMBUtils.repr(ZoomMeetingBotSDK.me.name), ZMBUtils.repr(Global.cfg.MyParticipantName));
-                    ZoomMeetingBotSDK.RenameParticipant(ZoomMeetingBotSDK.me, Global.cfg.MyParticipantName);
+                    Global.hostApp.Log(LogType.INF, "BOT Renaming myself from {0} to {1}", repr(Controller.me.name), repr(Global.cfg.MyParticipantName));
+                    Controller.RenameParticipant(Controller.me, Global.cfg.MyParticipantName);
                 }
 
-                if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.UnmuteMyself) != 0) && (ZoomMeetingBotSDK.me.audioStatus == ZoomMeetingBotSDK.ParticipantAudioStatus.Muted))
+                if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.UnmuteMyself) != 0) && (Controller.me.audioStatus == Controller.ParticipantAudioStatus.Muted))
                 {
                     // Unmute myself
                     Global.hostApp.Log(LogType.INF, "BOT Unmuting myself");
-                    ZoomMeetingBotSDK.UnmuteParticipant(ZoomMeetingBotSDK.me);
+                    Controller.UnmuteParticipant(Controller.me);
                 }
 
-                ZoomMeetingBotSDK.UpdateMeetingOptions();
+                Controller.UpdateMeetingOptions();
             }
 
             bool bWaiting = false;
             DateTime dtNow = DateTime.UtcNow;
-            foreach (ZoomMeetingBotSDK.Participant p in ZoomMeetingBotSDK.participants.Values)
+            foreach (Controller.Participant p in Controller.participants.Values)
             {
                 // Skip over my own participant record; We handled that earlier
                 if (p.isMe)
@@ -253,7 +252,7 @@
                 bool bAdmitKnown = (Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.AdmitKnown) != 0;
                 bool bAdmitOthers = (Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.AdmitOthers) != 0;
 
-                if (p.status == ZoomMeetingBotSDK.ParticipantStatus.Waiting)
+                if (p.status == Controller.ParticipantStatus.Waiting)
                 {
                     bWaiting = true;
 
@@ -266,8 +265,8 @@
                     {
                         if (bAdmitKnown)
                         {
-                            Global.hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", ZMBUtils.repr(p.name));
-                            if (ZoomMeetingBotSDK.AdmitParticipant(p))
+                            Global.hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", repr(p.name));
+                            if (Controller.AdmitParticipant(p))
                             {
                                 //SendTopic(p.name, false);
                             }
@@ -299,7 +298,7 @@
                         HsParticipantMessages.Add(sMsg);
                     }
 
-                    if (bAdmit && ZoomMeetingBotSDK.AdmitParticipant(p))
+                    if (bAdmit && Controller.AdmitParticipant(p))
                     {
                         HsParticipantMessages.Remove(sMsg); // After we admit the user, remove the message
                         dtNextAdmission = dtNow.AddSeconds(Global.cfg.UnknownParticipantThrottleSecs);
@@ -315,16 +314,16 @@
                     continue;
                 }
 
-                if (p.status == ZoomMeetingBotSDK.ParticipantStatus.Attending)
+                if (p.status == Controller.ParticipantStatus.Attending)
                 {
-                    if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.CoHostKnown) != 0) && (p.role == ZoomMeetingBotSDK.ParticipantRole.None) && (ZoomMeetingBotSDK.me.role == ZoomMeetingBotSDK.ParticipantRole.Host))
+                    if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.CoHostKnown) != 0) && (p.role == Controller.ParticipantRole.None) && (Controller.me.role == Controller.ParticipantRole.Host))
                     {
                         // If I'm host, and this user is not co-host, check if they should be
                         if (GoodUsers.TryGetValue(sCleanName, out bool bCoHost) && bCoHost)
                         {
                             // Yep, they should be, so do the promotion
-                            Global.hostApp.Log(LogType.INF, "BOT Promoting {0} to Co-host", ZMBUtils.repr(p.name));
-                            ZoomMeetingBotSDK.PromoteParticipant(p);
+                            Global.hostApp.Log(LogType.INF, "BOT Promoting {0} to Co-host", repr(p.name));
+                            Controller.PromoteParticipant(p);
                         }
                     }
 
@@ -357,21 +356,21 @@
                 dtNow = DateTime.UtcNow;
                 if (dtNow >= dtLastWaitingRoomAnnouncement.AddSeconds(Global.cfg.WaitingRoomAnnouncementDelaySecs))
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(ZoomMeetingBotSDK.SpecialRecipient.EveryoneInWaitingRoom, waitMsg);
+                    Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInWaitingRoom, waitMsg);
                     dtLastWaitingRoomAnnouncement = dtNow;
                 }
             }
 
             // Greet the first person to join the meeting, but only if we started Zoom
-            if ((!ZoomMeetingBotSDK.ZoomAlreadyRunning) && (FirstParticipantGreeted == null))
+            if ((!Controller.ZoomAlreadyRunning) && (FirstParticipantGreeted == null))
             {
-                var plist = ZoomMeetingBotSDK.participants.ToList();
+                var plist = Controller.participants.ToList();
 
                 // Looking for a participant that is not me, using computer audio, audio is connected, and is a known good user
                 var idx = plist.FindIndex(x => (
                     (!x.Value.isMe) &&
-                    (x.Value.device == ZoomMeetingBotSDK.ParticipantAudioDevice.Computer) &&
-                    (x.Value.audioStatus != ZoomMeetingBotSDK.ParticipantAudioStatus.Disconnected) &&
+                    (x.Value.device == Controller.ParticipantAudioDevice.Computer) &&
+                    (x.Value.audioStatus != Controller.ParticipantAudioStatus.Disconnected) &&
                     GoodUsers.ContainsKey(CleanUserName(x.Value.name))
                 ));
                 if (idx != -1)
@@ -382,7 +381,7 @@
                     Sound.Play("bootup");
                     Thread.Sleep(3000);
                     Sound.Speak(Global.cfg.MyParticipantName + " online.");
-                    ZoomMeetingBotSDK.SendChatMessage(ZoomMeetingBotSDK.SpecialRecipient.EveryoneInMeeting, true, msg);
+                    Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInMeeting, true, msg);
                 }
             }
         }
@@ -413,7 +412,7 @@
                 ReadRemoteCommands();
 
                 // Zoom is really bad about moving/resizing it's windows, so keep it in check
-                ZoomMeetingBotSDK.LayoutWindows();
+                Controller.LayoutWindows();
 
                 if (Global.cfg.IsPaused)
                 {
@@ -426,7 +425,7 @@
                 //Global.hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - DoChatActions", nTimerIterationID);
                 DoChatActions();
             }
-            catch (ZoomMeetingBotSDK.ZoomClosedException ex)
+            catch (Controller.ZoomClosedException ex)
             {
                 Global.hostApp.Log(LogType.INF, ex.ToString());
                 ShouldExit = true;
@@ -490,13 +489,13 @@
                     else if (line == "exit")
                     {
                         Global.hostApp.Log(LogType.INF, "Received {0} command", line);
-                        ZoomMeetingBotSDK.LeaveMeeting(false);
+                        Controller.LeaveMeeting(false);
                         ShouldExit = true;
                     }
                     else if (line == "kill")
                     {
                         Global.hostApp.Log(LogType.INF, "Received {0} command", line);
-                        ZoomMeetingBotSDK.LeaveMeeting(true);
+                        Controller.LeaveMeeting(true);
                     }
                     else
                     {
@@ -580,15 +579,15 @@
             }
         }
 
-        private static void OnMeetingOptionStateChange(object sender, ZoomMeetingBotSDK.MeetingOptionStateChangeEventArgs e)
+        private static void OnMeetingOptionStateChange(object sender, Controller.MeetingOptionStateChangeEventArgs e)
         {
-            Global.hostApp.Log(LogType.INF, "Meeting option {0} changed to {1}", ZMBUtils.repr(e.optionName), e.newState.ToString());
+            Global.hostApp.Log(LogType.INF, "Meeting option {0} changed to {1}", repr(e.optionName), e.newState.ToString());
         }
 
-        private static void OnParticipantAttendanceStatusChange(object sender, ZoomMeetingBotSDK.ParticipantEventArgs e)
+        private static void OnParticipantAttendanceStatusChange(object sender, Controller.ParticipantEventArgs e)
         {
-            ZoomMeetingBotSDK.Participant p = e.participant;
-            Global.hostApp.Log(LogType.INF, "Participant {0} status {1}", ZMBUtils.repr(p.name), p.status.ToString());
+            Controller.Participant p = e.participant;
+            Global.hostApp.Log(LogType.INF, "Participant {0} status {1}", repr(p.name), p.status.ToString());
 
             // TBD: Could immediately admit recognized attendees
         }
@@ -697,9 +696,9 @@
             return response;
         }
 
-        private static void SetSpeaker(ZoomMeetingBotSDK.Participant p, string from)
+        private static void SetSpeaker(Controller.Participant p, string from)
         {
-            ZoomMeetingBotSDK.SendChatMessage(from, "Speaker mode is not yet implemented");
+            Controller.SendChatMessage(from, "Speaker mode is not yet implemented");
 
             /*
             if (p == null)
@@ -784,9 +783,9 @@
             */
         }
 
-        private static void OnChatMessageReceive(object source, ZoomMeetingBotSDK.ChatEventArgs e)
+        private static void OnChatMessageReceive(object source, Controller.ChatEventArgs e)
         {
-            Global.hostApp.Log(LogType.INF, "New message from {0} to {1}: {2}", ZMBUtils.repr(e.from), ZMBUtils.repr(e.to), ZMBUtils.repr(e.text));
+            Global.hostApp.Log(LogType.INF, "New message from {0} to {1}: {2}", repr(e.from), repr(e.to), repr(e.text));
 
             string sTo = e.to;
             string sFrom = e.from;
@@ -818,7 +817,7 @@
                 sMsg = withoutMyName;
 
                 // My name is in it, so reply to everyone
-                sReplyTo = ZoomMeetingBotSDK.SpecialRecipient.EveryoneInMeeting;
+                sReplyTo = Controller.SpecialRecipient.EveryoneInMeeting;
             }
             else if (sTo.ToLower() != "me")
             {
@@ -832,11 +831,11 @@
                 // Try to get the best response possible; Fall back on something random if all else fails
                 //   TBD: Could make sure we don't say the same thing twice...
 
-                var isToEveryone = ZoomMeetingBotSDK.SpecialRecipient.IsEveryone(sReplyTo);
+                var isToEveryone = Controller.SpecialRecipient.IsEveryone(sReplyTo);
 
                 // If the bot is addressed publically or if there are only two people in the meeting, then reply with TTS
                 // TBD: Should be attending count, not participant count.  Some could be in the waiting room
-                var speak = isToEveryone || (ZoomMeetingBotSDK.participants.Count == 2);
+                var speak = isToEveryone || (Controller.participants.Count == 2);
 
                 // We start with a one-time hi.  Various bots may be in different time zones and the
                 //   good morning/afternoon/evening throws things off
@@ -890,7 +889,7 @@
                             break;
                         }
 
-                        Global.hostApp.Log(LogType.WRN, $"ChatBot converse with {ZMBUtils.repr(chatBot.GetChatBotInfo().Name)} failed: {ZMBUtils.repr(failureMsg)}");
+                        Global.hostApp.Log(LogType.WRN, $"ChatBot converse with {repr(chatBot.GetChatBotInfo().Name)} failed: {repr(failureMsg)}");
                     }
                 }
 
@@ -899,7 +898,7 @@
                     Global.hostApp.Log(LogType.ERR, "No ChatBot was able to produce a response");
                 }
 
-                ZoomMeetingBotSDK.SendChatMessage(sReplyTo, speak, FormatChatResponse(response, sFrom));
+                Controller.SendChatMessage(sReplyTo, speak, FormatChatResponse(response, sFrom));
 
                 return;
             }
@@ -920,13 +919,13 @@
             // Only allow admin users to run the following commands
             if (!bAdmin)
             {
-                Global.hostApp.Log(LogType.WRN, "Ignoring command {0} from non-admin {1}", ZMBUtils.repr(sMsg), ZMBUtils.repr(sFrom));
+                Global.hostApp.Log(LogType.WRN, "Ignoring command {0} from non-admin {1}", repr(sMsg), repr(sFrom));
                 return;
             }
 
-            if (!ZoomMeetingBotSDK.participants.TryGetValue(sFrom, out ZoomMeetingBotSDK.Participant sender))
+            if (!Controller.participants.TryGetValue(sFrom, out Controller.Participant sender))
             {
-                Global.hostApp.Log(LogType.ERR, "Received command {0} from {1}, but I don't have a Participant class for them", ZMBUtils.repr(sMsg), ZMBUtils.repr(e.from));
+                Global.hostApp.Log(LogType.ERR, "Received command {0} from {1}, but I don't have a Participant class for them", repr(sMsg), repr(e.from));
                 return;
             }
 
@@ -947,18 +946,18 @@
 
                     if (guardTime < 0)
                     {
-                        ZoomMeetingBotSDK.SendChatMessage(sender.name, $"{sCommand}: This broadcast message was already sent.");
+                        Controller.SendChatMessage(sender.name, $"{sCommand}: This broadcast message was already sent.");
                         return;
                     }
 
                     if ((guardTime > 0) && (dtNow <= dtSentTime.AddSeconds(Global.cfg.BroadcastCommandGuardTimeSecs)))
                     {
-                        ZoomMeetingBotSDK.SendChatMessage(sender.name, $"{sCommand}: This broadcast message was already sent recently. Please try again later.");
+                        Controller.SendChatMessage(sender.name, $"{sCommand}: This broadcast message was already sent recently. Please try again later.");
                         return;
                     }
                 }
 
-                ZoomMeetingBotSDK.SendChatMessage(ZoomMeetingBotSDK.SpecialRecipient.EveryoneInMeeting, sBroadcastMsg);
+                Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInMeeting, sBroadcastMsg);
                 BroadcastSentTime[sCommand] = dtNow;
 
                 return;
@@ -1013,11 +1012,11 @@
                     reply = "Topic is already set; Use /topic force to change it";
                 }
 
-                ZoomMeetingBotSDK.SendChatMessage(sReplyTo, reply);
+                Controller.SendChatMessage(sReplyTo, reply);
 
                 if (broadcast)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(ZoomMeetingBotSDK.SpecialRecipient.EveryoneInMeeting, GetTopic());
+                    Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInMeeting, GetTopic());
                 }
 
                 return;
@@ -1041,7 +1040,7 @@
                 {
                     if (args.Length <= 1)
                     {
-                        ZoomMeetingBotSDK.SendChatMessage(sender.name, $"Error: The format of the command is incorrect; Correct example: /{sCommand} {emailCommandArgs.ArgsExample}");
+                        Controller.SendChatMessage(sender.name, $"Error: The format of the command is incorrect; Correct example: /{sCommand} {emailCommandArgs.ArgsExample}");
                         return;
                     }
 
@@ -1052,11 +1051,11 @@
 
                 if (SendEmail(subject, body, toAddress))
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, $"{sCommand}: Successfully sent email to {toAddress}");
+                    Controller.SendChatMessage(sender.name, $"{sCommand}: Successfully sent email to {toAddress}");
                 }
                 else
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, $"{sCommand}: Failed to send email to {toAddress}");
+                    Controller.SendChatMessage(sender.name, $"{sCommand}: Failed to send email to {toAddress}");
                 }
 
 
@@ -1078,17 +1077,17 @@
                 }
                 else
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, the {0} command requires either on or off as a parameter", ZMBUtils.repr(sCommand));
+                    Controller.SendChatMessage(sender.name, "Sorry, the {0} command requires either on or off as a parameter", repr(sCommand));
                     return;
                 }
 
                 if (SetMode(sCommand, bNewMode))
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "{0} mode has been changed to {1}", GetFirstName(sCommand), sNewMode);
+                    Controller.SendChatMessage(sender.name, "{0} mode has been changed to {1}", GetFirstName(sCommand), sNewMode);
                 }
                 else
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "{0} mode is already {1}", GetFirstName(sCommand), sNewMode);
+                    Controller.SendChatMessage(sender.name, "{0} mode is already {1}", GetFirstName(sCommand), sNewMode);
                 }
                 return;
             }
@@ -1102,21 +1101,21 @@
                     if ((Global.cfg.WaitingRoomAnnouncementMessage != null) && (Global.cfg.WaitingRoomAnnouncementMessage.Length > 0))
                     {
                         Global.cfg.WaitingRoomAnnouncementMessage = null;
-                        ZoomMeetingBotSDK.SendChatMessage(sender.name, "Waiting room message has been turned off");
+                        Controller.SendChatMessage(sender.name, "Waiting room message has been turned off");
                     }
                     else
                     {
-                        ZoomMeetingBotSDK.SendChatMessage(sender.name, "Waiting room message is already off");
+                        Controller.SendChatMessage(sender.name, "Waiting room message is already off");
                     }
                 }
                 else if (sWaitMsg == Global.cfg.WaitingRoomAnnouncementMessage)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Waiting room message is already set to:\n{0}", sTarget);
+                    Controller.SendChatMessage(sender.name, "Waiting room message is already set to:\n{0}", sTarget);
                 }
                 else
                 {
                     Global.cfg.WaitingRoomAnnouncementMessage = sTarget.Trim();
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Waiting room message has set to:\n{0}", sTarget);
+                    Controller.SendChatMessage(sender.name, "Waiting room message has set to:\n{0}", sTarget);
                 }
                 return;
             }
@@ -1128,8 +1127,8 @@
                 string[] renameArgs = sTarget.Split(new string[] { " to " }, StringSplitOptions.RemoveEmptyEntries);
                 if (renameArgs.Length != 2)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Please use the format: /{0} Old Name to New Name", sCommand);
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Example: /{0} iPad User to John Doe", sCommand);
+                    Controller.SendChatMessage(sender.name, "Please use the format: /{0} Old Name to New Name", sCommand);
+                    Controller.SendChatMessage(sender.name, "Example: /{0} iPad User to John Doe", sCommand);
                     return;
                 }
                 sTarget = renameArgs[0];
@@ -1145,14 +1144,14 @@
 
             if ((sCommand == "speak") || (sCommand == "say"))
             {
-                ZoomMeetingBotSDK.SendChatMessage(ZoomMeetingBotSDK.SpecialRecipient.EveryoneInMeeting, sCommand == "speak", sTarget);
+                Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInMeeting, sCommand == "speak", sTarget);
 
                 return;
             }
 
             if (sCommand == "play")
             {
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Playing: {0}", ZMBUtils.repr(sTarget));
+                Controller.SendChatMessage(sender.name, "Playing: {0}", repr(sTarget));
                 Sound.Play(sTarget);
                 return;
             }
@@ -1164,16 +1163,16 @@
             }
 
             // All of the following require a participant target
-            if (!ZoomMeetingBotSDK.participants.TryGetValue(sTarget, out ZoomMeetingBotSDK.Participant target))
+            if (!Controller.participants.TryGetValue(sTarget, out Controller.Participant target))
             {
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, I don't see anyone named here named {0}. Remember, Case Matters!", ZMBUtils.repr(sTarget));
+                Controller.SendChatMessage(sender.name, "Sorry, I don't see anyone named here named {0}. Remember, Case Matters!", repr(sTarget));
                 return;
             }
 
             // Make sure I'm not the target :p
             if (target.isMe)
             {
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "U Can't Touch This\n* MC Hammer Music *\nhttps://youtu.be/otCpCn0l4Wo");
+                Controller.SendChatMessage(sender.name, "U Can't Touch This\n* MC Hammer Music *\nhttps://youtu.be/otCpCn0l4Wo");
                 return;
             }
 
@@ -1182,25 +1181,25 @@
             {
                 if (target.name == sender.name)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Why don't you just rename yourself?");
+                    Controller.SendChatMessage(sender.name, "Why don't you just rename yourself?");
                     return;
                 }
 
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Renaming {0} to {1}", ZMBUtils.repr(target.name), ZMBUtils.repr(newName));
-                ZoomMeetingBotSDK.RenameParticipant(target, newName);
+                Controller.SendChatMessage(sender.name, "Renaming {0} to {1}", repr(target.name), repr(newName));
+                Controller.RenameParticipant(target, newName);
                 return;
             }
 
             if (sCommand == "admit")
             {
-                if (target.status != ZoomMeetingBotSDK.ParticipantStatus.Waiting)
+                if (target.status != Controller.ParticipantStatus.Waiting)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} is not waiting", ZMBUtils.repr(target.name));
+                    Controller.SendChatMessage(sender.name, "Sorry, {0} is not waiting", repr(target.name));
                 }
                 else
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Admitting {0}", ZMBUtils.repr(target.name));
-                    if (ZoomMeetingBotSDK.AdmitParticipant(target))
+                    Controller.SendChatMessage(sender.name, "Admitting {0}", repr(target.name));
+                    if (Controller.AdmitParticipant(target))
                     {
                         // Participant was successfully admitted.  We want to send them the topic if one is set, but we can't do that
                         //   while they are in the waiting room (DMs cannot be sent to waiting room participants, only broadcast messages),
@@ -1213,27 +1212,27 @@
             }
 
             // Commands after here require the participant to be attending
-            if (target.status != ZoomMeetingBotSDK.ParticipantStatus.Attending)
+            if (target.status != Controller.ParticipantStatus.Attending)
             {
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} is not attending", ZMBUtils.repr(target.name));
+                Controller.SendChatMessage(sender.name, "Sorry, {0} is not attending", repr(target.name));
                 return;
             }
 
             if ((sCommand == "cohost") || (sCommand == "promote"))
             {
-                if (target.role != ZoomMeetingBotSDK.ParticipantRole.None)
+                if (target.role != Controller.ParticipantRole.None)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} is already Host or Co-Host so cannot be promoted", ZMBUtils.repr(target.name));
+                    Controller.SendChatMessage(sender.name, "Sorry, {0} is already Host or Co-Host so cannot be promoted", repr(target.name));
                 }
-                else if (target.videoStatus != ZoomMeetingBotSDK.ParticipantVideoStatus.On)
+                else if (target.videoStatus != Controller.ParticipantVideoStatus.On)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Co-Host name matched for {0}, but video is off", ZMBUtils.repr(target.name));
+                    Controller.SendChatMessage(sender.name, "Co-Host name matched for {0}, but video is off", repr(target.name));
                     return;
                 }
                 else
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Promoting {0} to Co-Host", ZMBUtils.repr(target.name));
-                    ZoomMeetingBotSDK.PromoteParticipant(target);
+                    Controller.SendChatMessage(sender.name, "Promoting {0} to Co-Host", repr(target.name));
+                    Controller.PromoteParticipant(target);
                 }
 
                 return;
@@ -1241,14 +1240,14 @@
 
             if (sCommand == "demote")
             {
-                if (target.role != ZoomMeetingBotSDK.ParticipantRole.CoHost)
+                if (target.role != Controller.ParticipantRole.CoHost)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, {0} isn't Co-Host so cannot be demoted", ZMBUtils.repr(target.name));
+                    Controller.SendChatMessage(sender.name, "Sorry, {0} isn't Co-Host so cannot be demoted", repr(target.name));
                 }
                 else
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(sender.name, "Demoting {0}", ZMBUtils.repr(target.name));
-                    ZoomMeetingBotSDK.DemoteParticipant(target);
+                    Controller.SendChatMessage(sender.name, "Demoting {0}", repr(target.name));
+                    Controller.DemoteParticipant(target);
                 }
 
                 return;
@@ -1256,15 +1255,15 @@
 
             if (sCommand == "mute")
             {
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Muting {0}", ZMBUtils.repr(target.name));
-                ZoomMeetingBotSDK.MuteParticipant(target);
+                Controller.SendChatMessage(sender.name, "Muting {0}", repr(target.name));
+                Controller.MuteParticipant(target);
                 return;
             }
 
             if (sCommand == "unmute")
             {
-                ZoomMeetingBotSDK.SendChatMessage(sender.name, "Requesting {0} to Unmute", ZMBUtils.repr(target.name));
-                ZoomMeetingBotSDK.UnmuteParticipant(target);
+                Controller.SendChatMessage(sender.name, "Requesting {0} to Unmute", repr(target.name));
+                Controller.UnmuteParticipant(target);
                 return;
             }
 
@@ -1274,7 +1273,7 @@
                 return;
             }
 
-            ZoomMeetingBotSDK.SendChatMessage(sender.name, "Sorry, I don't know the command {0}", ZMBUtils.repr(sCommand));
+            Controller.SendChatMessage(sender.name, "Sorry, I don't know the command {0}", repr(sCommand));
         }
 
         private static List<IChatBot> chatBots = null;
@@ -1301,11 +1300,11 @@
                 FileInfo[] files = subdir.GetFiles("ZoomMeetingBotSDK.ChatBot.*.dll");
                 if (files.Length > 1)
                 {
-                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {ZMBUtils.repr(subdir.FullName)}; More than one DLL found");
+                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {repr(subdir.FullName)}; More than one DLL found");
                 }
                 else if (files.Length == 0)
                 {
-                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {ZMBUtils.repr(subdir.FullName)}; No DLL found");
+                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {repr(subdir.FullName)}; No DLL found");
                 }
                 else
                 {
@@ -1326,14 +1325,14 @@
                                 {
                                     hostApp = Global.hostApp,
                                 });
-                                Global.hostApp.Log(LogType.DBG, $"Loaded {ZMBUtils.repr(chatBotInfo.Name)} chatbot with intelligence level {chatBotInfo.IntelligenceLevel}");
+                                Global.hostApp.Log(LogType.DBG, $"Loaded {repr(chatBotInfo.Name)} chatbot with intelligence level {chatBotInfo.IntelligenceLevel}");
                                 bots.Add(new Tuple<int, IChatBot>(chatBotInfo.IntelligenceLevel, chatBot));
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Global.hostApp.Log(LogType.ERR, $"Failed to load {ZMBUtils.repr(file.FullName)}: {ZMBUtils.repr(ex.ToString())}");
+                        Global.hostApp.Log(LogType.ERR, $"Failed to load {repr(file.FullName)}: {repr(ex.ToString())}");
                     }
                 }
             }
@@ -1359,7 +1358,7 @@
                     }
                     catch (Exception ex)
                     {
-                        Global.hostApp.Log(LogType.ERR, $"SettingsNotify failed: {ZMBUtils.repr(ex.ToString())}");
+                        Global.hostApp.Log(LogType.ERR, $"SettingsNotify failed: {repr(ex.ToString())}");
                     }
                 }
             }
@@ -1372,10 +1371,10 @@
                 chatBots = GetChatBots();
             }
 
-            ZoomMeetingBotSDK.ParticipantAttendanceStatusChange += OnParticipantAttendanceStatusChange;
-            ZoomMeetingBotSDK.ChatMessageReceive += OnChatMessageReceive;
-            ZoomMeetingBotSDK.MeetingOptionStateChange += OnMeetingOptionStateChange;
-            ZoomMeetingBotSDK.Start();
+            Controller.ParticipantAttendanceStatusChange += OnParticipantAttendanceStatusChange;
+            Controller.ChatMessageReceive += OnChatMessageReceive;
+            Controller.MeetingOptionStateChange += OnMeetingOptionStateChange;
+            Controller.Start();
 
             tmrIdle = new System.Threading.Timer(TimerIdleHandler, null, 0, 5000);
 
@@ -1389,7 +1388,7 @@
         {
             if (!endForAll)
             {
-                if (ZoomMeetingBotSDK.me.role != ZoomMeetingBotSDK.ParticipantRole.Host)
+                if (Controller.me.role != Controller.ParticipantRole.Host)
                 {
                     Global.hostApp.Log(LogType.DBG, "BOT LeaveMeeting - I am not host");
                 }
@@ -1397,10 +1396,10 @@
                 {
                     Global.hostApp.Log(LogType.DBG, "BOT LeaveMeeting - I am host; Trying to find someone to pass it to");
 
-                    ZoomMeetingBotSDK.Participant altHost = null;
-                    foreach (ZoomMeetingBotSDK.Participant p in ZoomMeetingBotSDK.participants.Values)
+                    Controller.Participant altHost = null;
+                    foreach (Controller.Participant p in Controller.participants.Values)
                     {
-                        if (p.role == ZoomMeetingBotSDK.ParticipantRole.CoHost)
+                        if (p.role == Controller.ParticipantRole.CoHost)
                         {
                             altHost = p;
                             break;
@@ -1416,13 +1415,13 @@
                     {
                         try
                         {
-                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passing Host to {0}", ZMBUtils.repr(altHost.name));
-                            ZoomMeetingBotSDK.PromoteParticipant(altHost, ZoomMeetingBotSDK.ParticipantRole.Host);
-                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passed Host to {0}", ZMBUtils.repr(altHost.name));
+                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passing Host to {0}", repr(altHost.name));
+                            Controller.PromoteParticipant(altHost, Controller.ParticipantRole.Host);
+                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passed Host to {0}", repr(altHost.name));
                         }
                         catch (Exception ex)
                         {
-                            Global.hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Failed to pass Host to {0}; Ending meeting", ZMBUtils.repr(altHost.name));
+                            Global.hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Failed to pass Host to {0}; Ending meeting", repr(altHost.name));
                             endForAll = true;
                         }
                     }
@@ -1430,7 +1429,7 @@
             }
 
             Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Leaving Meeting");
-            ZoomMeetingBotSDK.LeaveMeeting(endForAll);
+            Controller.LeaveMeeting(endForAll);
         }
 
         protected virtual void Dispose(bool disposing)
@@ -1453,14 +1452,14 @@
                     gmailSender = new GmailSenderLib.GmailSender(System.Reflection.Assembly.GetCallingAssembly().GetName().Name);
                 }
 
-                Global.hostApp.Log(LogType.ERR, "SendEmail - Sending email to {0} with subject {1}", ZMBUtils.repr(to), ZMBUtils.repr(subject));
+                Global.hostApp.Log(LogType.ERR, "SendEmail - Sending email to {0} with subject {1}", repr(to), repr(subject));
                 gmailSender.Send(new GmailSenderLib.SimpleMailMessage(subject, body, to));
 
                 return true;
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.ERR, "SendEmail - Failed; Exception: {0}", ZMBUtils.repr(ex.ToString()));
+                Global.hostApp.Log(LogType.ERR, "SendEmail - Failed; Exception: {0}", repr(ex.ToString()));
                 return false;
             }
         }

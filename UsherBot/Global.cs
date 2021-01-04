@@ -1,23 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading;
-using ZoomMeetingBotSDK.Interop.HostApp;
-using ZoomMeetingBotSDK.Utils;
-using static ZoomMeetingBotSDK.Utils.ZMBUtils;
-
-namespace ZoomMeetingBotSDK
+﻿namespace ZoomMeetingBotSDK
 {
+    using System;
+    using System.Collections.Generic;
+    using System.ComponentModel;
+    using System.Diagnostics;
+    using System.IO;
+    using System.Text.Json;
+    using System.Threading;
+    using global::ZoomMeetingBotSDK.Interop.HostApp;
+    using static Utils.ZMBUtils;
+
     public class Global
     {
-        static public IHostApp hostApp = null;
+        public static IHostApp hostApp = null;
 
         [Flags]
         public enum BotAutomationFlag
@@ -324,9 +319,9 @@ namespace ZoomMeetingBotSDK
             cfg = JsonSerializer.Deserialize<ConfigurationSettings>(json);
             cfgDic = JsonToDict(json);
 
-            ZMBUtils.ExpandDictionaryPipes(cfg.BroadcastCommands);
-            ZMBUtils.ExpandDictionaryPipes(cfg.OneTimeHiSequences);
-            ZMBUtils.ExpandDictionaryPipes(cfg.SmallTalkSequences);
+            ExpandDictionaryPipes(cfg.BroadcastCommands);
+            ExpandDictionaryPipes(cfg.OneTimeHiSequences);
+            ExpandDictionaryPipes(cfg.SmallTalkSequences);
 
             UsherBot.SettingsUpdated();
         }
@@ -410,7 +405,7 @@ namespace ZoomMeetingBotSDK
                     }
                     if (!bFound)
                     {
-                        throw new KeyNotFoundException(string.Format("Description/Name {0} not found in enum {1}", ZMBUtils.repr(description), ZMBUtils.repr(type.ToString())));
+                        throw new KeyNotFoundException(string.Format("Description/Name {0} not found in enum {1}", repr(description), repr(type.ToString())));
                     }
                 }
 

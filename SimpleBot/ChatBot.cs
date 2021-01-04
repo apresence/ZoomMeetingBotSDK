@@ -1,14 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using ZoomMeetingBotSDK.Interop.HostApp;
-using ZoomMeetingBotSDK.Interop.ChatBot;
-using ZoomMeetingBotSDK.Utils;
+﻿namespace ZoomMeetingBotSDK.ChatBot.SimpleBot
+{
+    using System.Collections.Generic;
+    using ZoomMeetingBotSDK.Interop.HostApp;
+    using ZoomMeetingBotSDK.Interop.ChatBot;
+    using ZoomMeetingBotSDK.Utils;
 
-namespace ZoomMeetingBotSDK.ChatBot.SimpleBot
-{   
     public class ChatBot : IChatBot
     {
         private static IHostApp hostApp = null;

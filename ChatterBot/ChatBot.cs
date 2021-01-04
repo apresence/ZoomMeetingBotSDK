@@ -1,11 +1,11 @@
-﻿using System;
-using System.Diagnostics;
-using ZoomMeetingBotSDK.Utils;
-using ZoomMeetingBotSDK.Interop.HostApp;
-using ZoomMeetingBotSDK.Interop.ChatBot;
-
-namespace ZoomMeetingBotSDK.ChatBot.ChatterBot
+﻿namespace ZoomMeetingBotSDK.ChatBot.ChatterBot
 {
+    using System;
+    using System.Diagnostics;
+    using ZoomMeetingBotSDK.Interop.HostApp;
+    using ZoomMeetingBotSDK.Interop.ChatBot;
+    using static ZoomMeetingBotSDK.Utils.ZMBUtils;
+
     /// <summary>
     /// This is an extremly simple/naive wrapper around chatbot.py which is a wrapper for chatterbot in Python.  Feel free to re-write it.
     /// https://chatterbot.readthedocs.io/en/stable/
@@ -66,7 +66,7 @@ namespace ZoomMeetingBotSDK.ChatBot.ChatterBot
             }
             catch (Exception ex)
             {
-                hostApp.Log(LogType.ERR, "chatBot failed to start: {0}", ZMBUtils.repr(ex.ToString()));
+                hostApp.Log(LogType.ERR, "chatBot failed to start: {0}", repr(ex.ToString()));
             }
         }
 
@@ -125,12 +125,12 @@ namespace ZoomMeetingBotSDK.ChatBot.ChatterBot
                 return null;
             }
 
-            hostApp.Log(LogType.DBG, "chatBot > {0}", ZMBUtils.repr(input));
+            hostApp.Log(LogType.DBG, "chatBot > {0}", repr(input));
             p.StandardInput.WriteLine(input);
 
             // TBD: Implement some sort of timeout or something so we don't hang forever if things go wonky
             string line = p.StandardOutput.ReadLine();
-            hostApp.Log(LogType.DBG, "chatBot < {0}", ZMBUtils.repr(line));
+            hostApp.Log(LogType.DBG, "chatBot < {0}", repr(line));
 
             return line;
         }

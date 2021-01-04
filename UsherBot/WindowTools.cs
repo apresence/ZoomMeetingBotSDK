@@ -8,17 +8,15 @@
 namespace ZoomMeetingBotSDK
 {
     using System;
-    using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Drawing;
-    using System.Management;
     using System.Runtime.InteropServices;
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Windows.Forms;
     using global::ZoomMeetingBotSDK.Interop.HostApp;
-    using global::ZoomMeetingBotSDK.Utils;
+    using static Utils.ZMBUtils;
+
 
     /*
     public static class ProcessExtensions
@@ -561,7 +559,7 @@ namespace ZoomMeetingBotSDK
                     var dtNow = DateTime.UtcNow;
                     if (dtNow.Subtract(dtStart).TotalMilliseconds >= timeout)
                     {
-                        throw new TimeoutException(string.Format("Timeout waiting for window with class {0} and name {1}", ZMBUtils.repr(lpClassName), ZMBUtils.repr(lpWindowName)));
+                        throw new TimeoutException(string.Format("Timeout waiting for window with class {0} and name {1}", repr(lpClassName), repr(lpWindowName)));
                     }
                     Thread.Sleep(poll);
                 }
@@ -591,7 +589,7 @@ namespace ZoomMeetingBotSDK
                     var dtNow = DateTime.UtcNow;
                     if (dtNow.Subtract(dtStart).TotalMilliseconds >= timeout)
                     {
-                        throw new TimeoutException(string.Format("Timeout waiting for window with class {0} and name {1}", ZMBUtils.repr(lpClassName), ZMBUtils.repr(reWindowName.ToString())));
+                        throw new TimeoutException(string.Format("Timeout waiting for window with class {0} and name {1}", repr(lpClassName), repr(reWindowName.ToString())));
                     }
                     Thread.Sleep(poll);
                 }
@@ -681,7 +679,7 @@ namespace ZoomMeetingBotSDK
             // TBD: Move back to old app after we're done?
             lock (InputLock)
             {
-                Global.hostApp.Log(LogType.DBG, "WindowTools.SendKeys {0}", ZMBUtils.repr(hide ? "(hidden)" : keys));
+                Global.hostApp.Log(LogType.DBG, "WindowTools.SendKeys {0}", repr(hide ? "(hidden)" : keys));
                 FocusWindow(hWnd);
                 System.Windows.Forms.SendKeys.SendWait(keys);
 
@@ -707,7 +705,7 @@ namespace ZoomMeetingBotSDK
             {
                 var useClipboard = !Global.cfg.DisableClipboardPasteText;
 
-                Global.hostApp.Log(LogType.DBG, $"SendText useClipboard={ZMBUtils.repr(useClipboard)} text={ZMBUtils.repr(text)}");
+                Global.hostApp.Log(LogType.DBG, $"SendText useClipboard={repr(useClipboard)} text={repr(text)}");
 
                 Exception caughtException = null;
                 if (useClipboard)
@@ -741,7 +739,7 @@ namespace ZoomMeetingBotSDK
                     else
                     {
                         // Sometimes SetText() throws an error in KERNELBASE.dll.  Seems to happen when Chrome Remote Desktop is in use
-                        //Global.hostApp.Log(LogType.ERR, "Caught exception while trying to set clipboard text: {0}", ZMBUtils.repr(caughtException.ToString()));
+                        //Global.hostApp.Log(LogType.ERR, "Caught exception while trying to set clipboard text: {0}", repr(caughtException.ToString()));
                         Global.hostApp.Log(LogType.WRN, "Failed to set clipboard text; Falling back on SendKeys");
                     }
                 }

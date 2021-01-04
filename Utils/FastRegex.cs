@@ -1,9 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
-
-namespace ZoomMeetingBotSDK.Utils
+﻿namespace ZoomMeetingBotSDK.Utils
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Text.RegularExpressions;
+
     /// <summary>
     /// These classes are intended to make working with large numbers of regular expressions efficient and convenient.  To do so normally, one would
     /// have to instantiate a static Regex object for each regular expression which requires additional lines of code and is messy to track,

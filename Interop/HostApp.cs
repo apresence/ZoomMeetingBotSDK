@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ZoomMeetingBotSDK.Interop.HostApp
+﻿namespace ZoomMeetingBotSDK.Interop.HostApp
 {
+    using System;
+    using System.Diagnostics;
+    using System.Text;
+
     public enum LogType
     {
         INF = 0,

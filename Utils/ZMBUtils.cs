@@ -1,17 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Web.Script.Serialization;
-
-namespace ZoomMeetingBotSDK.Utils
+﻿namespace ZoomMeetingBotSDK.Utils
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Security.Cryptography;
+    using System.Text;
+    using System.Text.RegularExpressions;
+    using System.Web.Script.Serialization;
+
     /// <summary>
     /// We make this class abstract so that some members can be overriden with more tailored implementations.
     /// </summary>
-    public abstract class ZMBUtils
+    public class ZMBUtils
     {
         public static readonly char[] CRLFDelim = new char[] { '\r', '\n' };
 

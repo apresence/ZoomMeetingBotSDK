@@ -6,7 +6,7 @@
     using System.Text;
     using System.Threading;
     using global::ZoomMeetingBotSDK.Interop.HostApp;
-    using global::ZoomMeetingBotSDK.Utils;
+    using static Utils.ZMBUtils;
 
     public class UBHostApp : CHostApp
     {
@@ -41,7 +41,7 @@
                     ret.Add(kvp.Key, Convert.ToString(kvp.Value));
                 }
 
-                ZMBUtils.ExpandDictionaryPipes(ret);
+                ExpandDictionaryPipes(ret);
 
                 return ret;
             }
@@ -64,7 +64,7 @@
                     }
                     catch (IOException ex)
                     {
-                        Console.WriteLine(string.Format("ERR Failed to write log file; Trying again in 1s (Attempt #{0}); Exception: {1}", attempt, ZMBUtils.repr(ex.ToString())));
+                        Console.WriteLine(string.Format("ERR Failed to write log file; Trying again in 1s (Attempt #{0}); Exception: {1}", attempt, repr(ex.ToString())));
                         Thread.Sleep(1000);
 
                         continue;
