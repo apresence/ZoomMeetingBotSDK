@@ -38,7 +38,7 @@
 
             hostApp.Log(LogType.DBG, "Initializing TTS");
             tts = new SpeechSynthesizer();
-            var voice = hostApp.GetSetting("tts.voice");
+            var voice = hostApp.GetSetting("TTSVoice");
             if ((voice != null) && (voice.Length > 0))
             {
                 try

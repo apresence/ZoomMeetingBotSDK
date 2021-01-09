@@ -6,15 +6,29 @@
 
     public static class IEnumerableExtensions
     {
-        public static T RandomElementUsing<T>(this IEnumerable<T> enumerable, Random rand)
-        {
-            int index = rand.Next(0, enumerable.Count());
-            return enumerable.ElementAt(index);
-        }
+        private static readonly Random defaultRNG = new Random();
 
-        public static T RandomElement<T>(this IEnumerable<T> enumerable)
+        /// <summary>
+        /// Retrieves a random element from an enumerable using an optionally provided random number generator "rand".
+        /// If "rand" is not provided, a default global RNG will be used.
+        /// </summary>
+        public static T RandomElement<T>(this IEnumerable<T> enumerable, Random rng = null)
         {
-            return enumerable.RandomElementUsing<T>(new Random());
+            int index;
+
+            if (rng == null)
+            {
+                lock (defaultRNG)
+                {
+                    index = defaultRNG.Next(0, enumerable.Count());
+                }
+            }
+            else
+            {
+                index = rng.Next(0, enumerable.Count());
+            }
+
+            return enumerable.ElementAt(index);
         }
     }
 }

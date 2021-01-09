@@ -15,6 +15,7 @@ namespace ZoomMeetingBotSDK
     using System.Threading;
     using System.Windows.Forms;
     using static Utils;
+    using ZoomMeetingBotSDK;
 
 
     /*
@@ -357,8 +358,8 @@ namespace ZoomMeetingBotSDK
             double dx = Math.Abs(targetPos.X - origPos.X);
             double dy = Math.Abs(targetPos.Y - origPos.Y);
             //double h = Hypotenuse(dx, dy);
-            //int moves = (int)(h / (Global.cfg.MouseMovementRate * pixPerTix));
-            int moves = (int)Global.cfg.MouseMovementRate / moveDelay;
+            //int moves = (int)(h / (Controller.cfg.MouseMovementRate * pixPerTix));
+            int moves = (int)Controller.cfg.MouseMovementRate / moveDelay;
             dx = ((targetPos.X < origPos.X) ? -1 : 1) * (dx / moves);
             dy = ((targetPos.Y < origPos.Y) ? -1 : 1) * (dy / moves);
 
@@ -433,12 +434,12 @@ namespace ZoomMeetingBotSDK
 
                 // get screen coordinates
                 //ClientToScreen(wndHandle, ref clientPoint);
-                Global.hostApp.Log(LogType.DBG, "ClickOnPoint {0:X8} {1}", (uint)wndHandle, clientPoint.ToString());
+                Controller.hostApp.Log(LogType.DBG, "ClickOnPoint {0:X8} {1}", (uint)wndHandle, clientPoint.ToString());
 
                 // set cursor on coords, and press mouse
                 Cursor.Position = new System.Drawing.Point(clientPoint.X, clientPoint.Y);
 
-                Thread.Sleep(Global.cfg.ClickDelayMilliseconds);
+                Thread.Sleep(Controller.cfg.ClickDelayMilliseconds);
 
                 var inputMouseDown = new INPUT
                 {
@@ -639,7 +640,7 @@ namespace ZoomMeetingBotSDK
                     SetForegroundWindow(hWnd);
 
                     // Give UI a chance to process it
-                    Thread.Sleep(Global.cfg.UIActionDelayMilliseconds);
+                    Thread.Sleep(Controller.cfg.UIActionDelayMilliseconds);
                 }
             }
         }
@@ -678,12 +679,12 @@ namespace ZoomMeetingBotSDK
             // TBD: Move back to old app after we're done?
             lock (InputLock)
             {
-                Global.hostApp.Log(LogType.DBG, "WindowTools.SendKeys {0}", repr(hide ? "(hidden)" : keys));
+                Controller.hostApp.Log(LogType.DBG, "WindowTools.SendKeys {0}", repr(hide ? "(hidden)" : keys));
                 FocusWindow(hWnd);
                 System.Windows.Forms.SendKeys.SendWait(keys);
 
                 // Give UI a chance to process it
-                Thread.Sleep(Global.cfg.KeyboardInputDelayMilliseconds);
+                Thread.Sleep(Controller.cfg.KeyboardInputDelayMilliseconds);
             }
         }
 
@@ -702,9 +703,9 @@ namespace ZoomMeetingBotSDK
         {
             lock (InputLock)
             {
-                var useClipboard = !Global.cfg.DisableClipboardPasteText;
+                var useClipboard = !Controller.cfg.DisableClipboardPasteText;
 
-                Global.hostApp.Log(LogType.DBG, $"SendText useClipboard={repr(useClipboard)} text={repr(text)}");
+                Controller.hostApp.Log(LogType.DBG, $"SendText useClipboard={repr(useClipboard)} text={repr(text)}");
 
                 Exception caughtException = null;
                 if (useClipboard)
@@ -731,15 +732,15 @@ namespace ZoomMeetingBotSDK
                         System.Windows.Forms.SendKeys.SendWait("^V");
 
                         // Give UI a chance to process it
-                        Thread.Sleep(Global.cfg.KeyboardInputDelayMilliseconds);
+                        Thread.Sleep(Controller.cfg.KeyboardInputDelayMilliseconds);
 
                         return;
                     }
                     else
                     {
                         // Sometimes SetText() throws an error in KERNELBASE.dll.  Seems to happen when Chrome Remote Desktop is in use
-                        //Global.hostApp.Log(LogType.ERR, "Caught exception while trying to set clipboard text: {0}", repr(caughtException.ToString()));
-                        Global.hostApp.Log(LogType.WRN, "Failed to set clipboard text; Falling back on SendKeys");
+                        //Controller.hostApp.Log(LogType.ERR, "Caught exception while trying to set clipboard text: {0}", repr(caughtException.ToString()));
+                        Controller.hostApp.Log(LogType.WRN, "Failed to set clipboard text; Falling back on SendKeys");
                     }
                 }
 
@@ -778,31 +779,31 @@ namespace ZoomMeetingBotSDK
         /// </summary>
         public static void WakeScreen()
         {
-            Global.hostApp.Log(LogType.DBG, "Trying to wake the screen");
+            Controller.hostApp.Log(LogType.DBG, "Trying to wake the screen");
             try
             {
                 WiggleMouse();
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.WRN, "Failed to wake screen: {0}", ex.ToString());
+                Controller.hostApp.Log(LogType.WRN, "Failed to wake screen: {0}", ex.ToString());
             }
 
             if (ScreenSaver.GetScreenSaverRunning())
             {
-                Global.hostApp.Log(LogType.DBG, "Trying to stop the screen saver");
+                Controller.hostApp.Log(LogType.DBG, "Trying to stop the screen saver");
                 try
                 {
                     ScreenSaver.KillScreenSaver();
                 }
                 catch (Exception ex)
                 {
-                    Global.hostApp.Log(LogType.WRN, "Failed to stop screen saver: {0}", ex.ToString());
+                    Controller.hostApp.Log(LogType.WRN, "Failed to stop screen saver: {0}", ex.ToString());
                 }
             }
             else
             {
-                Global.hostApp.Log(LogType.DBG, "Screen saver is not running");
+                Controller.hostApp.Log(LogType.DBG, "Screen saver is not running");
             }
         }
 

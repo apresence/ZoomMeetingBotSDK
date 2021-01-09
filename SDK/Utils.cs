@@ -2,32 +2,97 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
+    using System.Reflection;
     using System.Security.Cryptography;
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Web.Script.Serialization;
 
     /// <summary>
-    /// We make this class abstract so that some members can be overriden with more tailored implementations.
+    /// Common utilities useful in implementing bots.
     /// </summary>
-    public class Utils
+    public static class Utils
     {
         public static readonly char[] CRLFDelim = new char[] { '\r', '\n' };
 
-        private static JavaScriptSerializer serializer = null;
+        /// <summary>
+        /// Shared global serializer.  This is a tradeoff between instantiation and lock contention time.
+        /// Since I don't plan on using it often, I've chosen the shared/locking method.
+        /// </summary>
+        private static JavaScriptSerializer serializer = new JavaScriptSerializer();
 
-        public static Dictionary<string, dynamic> JsonToDict(string json)
+        public static Dictionary<string, dynamic> JsonToDic(string json)
         {
-            if (serializer == null)
-            {
-                serializer = new JavaScriptSerializer();
-            }
-
             lock (serializer)
             {
                 return (Dictionary<string, dynamic>)serializer.DeserializeObject(json);
             }
         }
+
+        /// <summary>
+        /// Populates properties of target object with key/value pairs defined in dic.
+        /// </summary>
+        public static void DeserializeDictToObject<T>(Dictionary<string, dynamic> dic, T target)
+        {
+            FieldInfo[] fields = target.GetType().GetFields();
+
+            foreach (var field in fields)
+            {
+                if (dic.TryGetValue(field.Name, out dynamic val))             
+                {
+                    field.SetValue(target, val);
+                }
+            }
+        }
+
+        /// <summary>
+        /// My own lightweight implementation for deserializing a JSON string into an arbitrary object. Similar to JSON.NET's JsonSerializer.Deserialize,
+        /// but uses only native .NET objects rather than depending on a bunch of NuGet libraries. NOTE: Only handles one level of nesting.
+        /// </summary>
+        public static void JsonDeserialize<T>(string json, T target)
+        {
+            DeserializeDictToObject<T>(JsonToDic(json), target);
+        }
+        public static List<string> DynToStrList(dynamic lst)
+        {
+            if (lst == null)
+            {
+                return null;
+            }
+
+            var ret = new List<string>();
+            foreach (var item in lst)
+            {
+                ret.Add(Convert.ToString(item));
+            }
+
+            return ret;
+        }
+
+        public static Dictionary<string, string> DynToStrDic(dynamic dic)
+        {
+            if (dic == null)
+            {
+                return null;
+            }
+
+            return ((Dictionary<string, dynamic>)dic).ToDictionary<KeyValuePair<string, dynamic>, string, string>(kvp => kvp.Key, kvp => Convert.ToString(kvp.Value));
+        }
+
+        public static Dictionary<string, string> DynDicValueToStrDic(dynamic dic, string key)
+        {
+            Dictionary<string, dynamic> dicDic = dic;
+
+            if (!dicDic.TryGetValue(key, out dynamic valueDyn))
+            {
+                return null;
+            }
+
+            return DynToStrDic(valueDyn);
+        }
+
+        //public static bool JsonLoad
 
         /// <summary>
         /// Reference implementation for returning a string representation of an object, similar to Python's native repr() function.
@@ -134,6 +199,11 @@
 
         public static void ExpandDictionaryPipes(Dictionary<string, string> dic)
         {
+            if (dic is null)
+            {
+                return;
+            }
+            
             string[] keys = new string[dic.Count];
             dic.Keys.CopyTo(keys, 0);
 

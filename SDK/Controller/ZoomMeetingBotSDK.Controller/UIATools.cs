@@ -114,7 +114,7 @@
 
         public static string WalkRawElementsToString(AutomationElement parentElement, bool force = false)
         {
-            if (!(Global.cfg.EnableWalkRawElementsToString || force))
+            if (!(Controller.cfg.EnableWalkRawElementsToString || force))
             {
                 return "(disabled)";
             }
@@ -126,7 +126,7 @@
 
         public static void LogSupportedPatterns(AutomationElement ae)
         {
-            Global.hostApp.Log(LogType.DBG, "Supported patterns for {0} {1}:", repr(ae.Current.LocalizedControlType), repr(ae.Current.Name));
+            Controller.hostApp.Log(LogType.DBG, "Supported patterns for {0} {1}:", repr(ae.Current.LocalizedControlType), repr(ae.Current.Name));
 
             List<string> l = new List<string>();
 
@@ -135,16 +135,16 @@
             {
                 l.Add(ap.ProgrammaticName);
             }
-            Global.hostApp.Log(LogType.DBG, "  {0}", l.Count == 0 ? "None" : string.Join(",", l));
+            Controller.hostApp.Log(LogType.DBG, "  {0}", l.Count == 0 ? "None" : string.Join(",", l));
         }
 
         public static void LogSiblings(AutomationElement ae)
         {
-            Global.hostApp.Log(LogType.DBG, "Siblings:");
+            Controller.hostApp.Log(LogType.DBG, "Siblings:");
             var nodeAttendee = TreeWalker.ContentViewWalker.GetNextSibling(ae);
             while (nodeAttendee != null)
             {
-                Global.hostApp.Log(LogType.DBG, "  {0}", GetObjStrs(nodeAttendee.Current));
+                Controller.hostApp.Log(LogType.DBG, "  {0}", GetObjStrs(nodeAttendee.Current));
                 LogSupportedPatterns(nodeAttendee);
                 nodeAttendee = TreeWalker.RawViewWalker.GetNextSibling(nodeAttendee);
             }
@@ -152,11 +152,11 @@
 
         public static void LogChildren(AutomationElement ae)
         {
-            Global.hostApp.Log(LogType.DBG, "Children:");
+            Controller.hostApp.Log(LogType.DBG, "Children:");
             var nodeAttendee = TreeWalker.ContentViewWalker.GetFirstChild(ae);
             while (nodeAttendee != null)
             {
-                Global.hostApp.Log(LogType.DBG, "  {0}", GetObjStrs(nodeAttendee.Current));
+                Controller.hostApp.Log(LogType.DBG, "  {0}", GetObjStrs(nodeAttendee.Current));
                 LogSupportedPatterns(nodeAttendee);
                 nodeAttendee = TreeWalker.RawViewWalker.GetNextSibling(nodeAttendee);
             }

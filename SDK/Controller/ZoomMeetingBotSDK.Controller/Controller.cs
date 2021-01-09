@@ -7,7 +7,6 @@
     using System.Diagnostics;
     using System.Drawing;
     using System.Globalization;
-    using System.Linq;
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Threading;
@@ -17,8 +16,108 @@
 
     using static Utils;
 
-    internal class Controller
+    public class Controller
     {
+        public class ControllerConfigurationSettings
+        {
+            /// <summary>
+            /// Absolute path to web browser executable.
+            /// </summary>
+            public string BrowserExecutable = @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe";
+
+            /// <summary>
+            /// Optional command line arguments to pass to web browser.
+            /// </summary>
+            public string BrowserArguments = "https://zoom.us/signin";
+
+            /// <summary>
+            /// Name to use when joining the Zoom meeting.  If the default name does not match, a rename is done after joining the meeting.
+            /// </summary>
+            public string MyParticipantName = "ZoomBot";
+
+            /// <summary>
+            /// ID of the meeting to join.
+            /// </summary>
+            public string MeetingID = null;
+
+            /// <summary>
+            /// Disables using clipboard to paste text into target apps; Falls back on sending individual keystrokes instead.
+            /// </summary>
+            public bool DisableClipboardPasteText = false;
+
+            /// <summary>
+            /// Number of times to retry parsing participant list until count matches what is in the window title.
+            /// </summary>
+            public int ParticipantCountMismatchRetries = 3;
+
+            /// <summary>
+            /// Number of ms to delay after performing an action which requires an update to the Zoom UI.
+            /// </summary>
+            public int UIActionDelayMilliseconds = 250;
+
+            /// <summary>
+            /// Number of ms to delay after moving mouse to target location before sending click event.
+            /// </summary>
+            public int ClickDelayMilliseconds = 0;
+
+            /// <summary>
+            /// Number of ms to delay after sending keyboard input to the remote app.
+            /// </summary>
+            public int KeyboardInputDelayMilliseconds = 0;
+
+            /// <summary>
+            /// Disable paging up/down in the Participants window. If screen resolution is sufficiently big (height), it may not be needed.
+            /// </summary>
+            public bool DisableParticipantPaging = false;
+
+            /// <summary>
+            /// Duration of time over which to do mouse moves when simulating input. This helps the target app "see" the mouse movement more reliably. <= 0 will move the mouse instantly.
+            /// </summary>
+            public int MouseMovementRate = 100;
+
+            /// <summary>
+            /// Seconds to wait between opening the meeting options menu to get status from the UI.
+            /// Special values:
+            ///   -1  Only poll when meeting is first started, then poll on demand (when one of the options needs to be changed)
+            ///    0  Poll as fast as possible
+            ///   >0  Delay between polls
+            /// </summary>
+            public int UpdateMeetingOptionsDelaySecs = -1;
+
+            /// <summary>
+            /// Configures which display should be used to run Zoom, ZoomMeetingBotSDK, UsherBot, etc.  The default is whichever display is set as the "main" screen
+            /// </summary>
+            public string Screen = null;
+
+            /// <summary>
+            /// Full path to Zoom executable
+            /// </summary>
+            public string ZoomExecutable = @"%AppData%\Zoom\bin\Zoom.exe";
+
+            /// <summary>
+            /// User name for Zoom account
+            /// </summary>
+            public string ZoomUsername = null;
+
+            /// <summary>
+            /// Password for Zoom account (encrypted - can only be decrypted by the current user on the current machine)
+            /// </summary>
+            public string ZoomPassword = null;
+
+            /// <summary>
+            /// Enables the function WalkRawElementsToString() which walks the entire AutomationElement tree and returns a string.  The default is True.  This is an
+            /// extremely expensive operation, often taking a minute or more, so disabling it on live meetings may be a good idea.
+            /// </summary>
+            public bool EnableWalkRawElementsToString = false;
+
+            public ControllerConfigurationSettings()
+            {
+                ClickDelayMilliseconds = UIActionDelayMilliseconds;
+                KeyboardInputDelayMilliseconds = UIActionDelayMilliseconds;
+            }
+        }
+        public static ControllerConfigurationSettings cfg = new ControllerConfigurationSettings();
+
         public enum MeetingOption
         {
             [Description("Mute Participants upon Entry")]
@@ -47,6 +146,73 @@
             EveryonePublicallyAndPrivately,
         }
 
+        /// <summary>
+        /// Class providing Enum of strings. Uses description attribute and reflection. Caches values for efficiency.
+        /// Based on this article: https://stackoverflow.com/questions/4367723/get-enum-from-description-attribute.
+        /// </summary>
+        private static class EnumEx
+        {
+            private static readonly Dictionary<(Type, dynamic), string> DescCache = new Dictionary<(Type, dynamic), string>();
+
+            public static string GetDescriptionFromValue<T>(T value)
+            {
+                var key = (typeof(T), value);
+
+                if (!DescCache.TryGetValue(key, out string ret))
+                {
+                    ret = (Attribute.GetCustomAttribute(value.GetType().GetField(value.ToString()), typeof(DescriptionAttribute)) is DescriptionAttribute attribute) ? attribute.Description : value.ToString();
+                    DescCache[key] = ret;
+                }
+
+                return ret;
+            }
+
+            private static readonly Dictionary<(Type, string), dynamic> ValueCache = new Dictionary<(Type, string), dynamic>();
+
+            public static T GetValueFromDescription<T>(string description)
+            {
+                var type = typeof(T);
+                var key = (typeof(T), description);
+
+                if (!ValueCache.TryGetValue(key, out dynamic ret))
+                {
+                    if (!type.IsEnum)
+                    {
+                        throw new InvalidOperationException();
+                    }
+
+                    bool bFound = false;
+                    foreach (var field in type.GetFields())
+                    {
+                        if (Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute)) is DescriptionAttribute attribute)
+                        {
+                            if (attribute.Description == description)
+                            {
+                                bFound = true;
+                                ret = field.GetValue(null);
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            if (field.Name == description)
+                            {
+                                bFound = true;
+                                ret = field.GetValue(null);
+                                break;
+                            }
+                        }
+                    }
+                    if (!bFound)
+                    {
+                        throw new KeyNotFoundException(string.Format("Description/Name {0} not found in enum {1}", repr(description), repr(type.ToString())));
+                    }
+                }
+
+                return (T)ret;
+            }
+        }
+
         public class MeetingOptionStateChangeEventArgs : EventArgs
         {
             public MeetingOption optionValue;
@@ -59,6 +225,8 @@
 
         // Was the Zoom app already running, or did we start it ourselves
         public static bool ZoomAlreadyRunning = false;
+
+        internal static IHostApp hostApp;
 
         private static readonly Dictionary<MeetingOption, ToggleState> _globalParticipantOptions = new Dictionary<MeetingOption, ToggleState>();
 
@@ -110,7 +278,7 @@
                     // TBD: Might want to also check arguments for uniqueness
                     if (item.Function.Method.Name == args.Function.Method.Name)
                     {
-                        Global.hostApp.Log(LogType.WRN, "Ignoring duplicate action {0} for participant {1}", item.Function.Method.Name, repr(targetName));
+                        hostApp.Log(LogType.WRN, "Ignoring duplicate action {0} for participant {1}", item.Function.Method.Name, repr(targetName));
                         return;
                     }
                 }
@@ -148,7 +316,7 @@
                 // Update AutomationElement for this target (The participants move around in the list pretty regularly; This makes sure we target the right entry if it has moved)
                 args.Target._ae = p._ae;
 
-                Global.hostApp.Log(LogType.INF, "Attempt #{2} for participant {0} action {1}", repr(targetName), args.Function.Method.Name, args.Attempts);
+                hostApp.Log(LogType.INF, "Attempt #{2} for participant {0} action {1}", repr(targetName), args.Function.Method.Name, args.Attempts);
                 var success = args.Function(args);
 
                 if (success)
@@ -159,13 +327,13 @@
                 {
                     if (args.Attempts == 3)
                     {
-                        Global.hostApp.Log(LogType.ERR, "Max attempts reached for participant {0} action {1}", repr(targetName), args.Function.Method.Name);
+                        hostApp.Log(LogType.ERR, "Max attempts reached for participant {0} action {1}", repr(targetName), args.Function.Method.Name);
 
                         // Fall through to remove this action from the queue
                     }
                     else
                     {
-                        Global.hostApp.Log(LogType.WRN, "Attempt #{2} failure for participant {0} action {1}", repr(targetName), args.Function.Method.Name, args.Attempts);
+                        hostApp.Log(LogType.WRN, "Attempt #{2} failure for participant {0} action {1}", repr(targetName), args.Function.Method.Name, args.Attempts);
 
                         // The action failed; We can't process any other actions until this one is done, so stop.  We'll try again later
                         break;
@@ -180,7 +348,7 @@
                     IndividualParticipantActionQueue.Remove(targetName);
 
                     // We reached the end of the queue, so stop
-                    Global.hostApp.Log(LogType.DBG, "Done processing participant {0} actions", repr(targetName));
+                    hostApp.Log(LogType.DBG, "Done processing participant {0} actions", repr(targetName));
                     break;
                 }
             }
@@ -190,7 +358,7 @@
 
         private static ToggleState GetMeetingOption(MeetingOption option, bool updateIfNeeded = true)
         {
-            if ((updateIfNeeded) && (Global.cfg.UpdateMeetingOptionsDelaySecs == -1))
+            if ((updateIfNeeded) && (cfg.UpdateMeetingOptionsDelaySecs == -1))
             {
                 UpdateMeetingOptions(true);
             }
@@ -218,7 +386,7 @@
             // It's not what we want, so click it to toggle
             //_ = ClickParticipantWindowControl("More options to manage all participants", true, ControlType.SplitButton);
             _ = ClickMoreOptionsToManageAllParticipants();
-            InvokeMenuItem(aeParticipantsWindow, Global.EnumEx.GetDescriptionFromValue(option));
+            InvokeMenuItem(aeParticipantsWindow, EnumEx.GetDescriptionFromValue(option));
         }
 
         public static void UpdateMeetingOptions(bool force = false)
@@ -230,48 +398,48 @@
              */
             if (force)
             {
-                Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Forced update");
+                hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Forced update");
             }
-            else if (Global.cfg.UpdateMeetingOptionsDelaySecs == -1)
+            else if (cfg.UpdateMeetingOptionsDelaySecs == -1)
             {
                 if (nextMeetingOptionsUpdate == DateTime.MinValue)
                 {
-                    Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Performing initial update");
+                    hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Performing initial update");
                     nextMeetingOptionsUpdate = DateTime.MaxValue;
                 }
                 else
                 {
-                    Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Already performed initial update");
+                    hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Already performed initial update");
                     return;
                 }
             }
-            else if (Global.cfg.UpdateMeetingOptionsDelaySecs == 0)
+            else if (cfg.UpdateMeetingOptionsDelaySecs == 0)
             {
-                Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Polling as fast as possible");
+                hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Polling as fast as possible");
             }
-            else if (Global.cfg.UpdateMeetingOptionsDelaySecs > 0)
+            else if (cfg.UpdateMeetingOptionsDelaySecs > 0)
             {
                 if (DateTime.UtcNow < nextMeetingOptionsUpdate)
                 {
-                    Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Not time to update yet (Next: {0})", repr(nextMeetingOptionsUpdate));
+                    hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Not time to update yet (Next: {0})", repr(nextMeetingOptionsUpdate));
                     return;
                 }
 
-                nextMeetingOptionsUpdate = DateTime.UtcNow.AddSeconds(Global.cfg.UpdateMeetingOptionsDelaySecs);
+                nextMeetingOptionsUpdate = DateTime.UtcNow.AddSeconds(cfg.UpdateMeetingOptionsDelaySecs);
             }
 
-            Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Enter");
+            hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Enter");
             try
             {
                 //_ = ClickParticipantWindowControl("More options to manage all participants", true, ControlType.SplitButton);
                 _ = ClickMoreOptionsToManageAllParticipants();
 
-                Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - WaitPopupMenu");
+                hostApp.Log(LogType.DBG, "UpdateMeetingOptions - WaitPopupMenu");
                 var menu = WaitPopupMenu();
 
-                //Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Menu AETree: {0}", UIATools.WalkRawElementsToString(menu));
+                //hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Menu AETree: {0}", UIATools.WalkRawElementsToString(menu));
 
-                Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Caching Menu Items");
+                hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Caching Menu Items");
                 CacheRequest cr = new CacheRequest();
                 cr.Add(AutomationElement.NameProperty);
                 cr.Add(TogglePatternIdentifiers.Pattern);
@@ -289,15 +457,15 @@
                     return;
                 }
 
-                Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Retrieving CachedChildren");
+                hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Retrieving CachedChildren");
                 var options = list.CachedChildren;
 
-                Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Closing Menu");
+                hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Closing Menu");
                 WindowTools.SendKeys("{ESC}"); // Break out of menu. TBD: May be better just to click somewhere?
 
                 //var options = menu.FindAll(TreeScope.Children, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.CheckBox));
 
-                Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Parsing Menu Items");
+                hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Parsing Menu Items");
                 foreach (AutomationElement option in options)
                 {
                     // Skip over blank/spacer options
@@ -316,7 +484,7 @@
                     var newState = ((TogglePattern)togglePattern).Cached.ToggleState;
 
                     // Get current value
-                    var optionValue = Global.EnumEx.GetValueFromDescription<MeetingOption>(optionName);
+                    var optionValue = EnumEx.GetValueFromDescription<MeetingOption>(optionName);
 
                     // Update value if changed
                     ToggleState oldState = GetMeetingOption(optionValue, false);
@@ -337,7 +505,7 @@
             }
             finally
             {
-                Global.hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Exit");
+                hostApp.Log(LogType.DBG, "UpdateMeetingOptions - Exit");
             }
         }
 
@@ -360,7 +528,7 @@
             public EventWatcher(int pid)
             {
                 this.processID = pid;
-                Global.hostApp.Log(LogType.DBG, "Setting Up Event Handlers");
+                hostApp.Log(LogType.DBG, "Setting Up Event Handlers");
 
                 System.Windows.Automation.Automation.AddAutomationFocusChangedEventHandler(
                     new AutomationFocusChangedEventHandler(OnFocusChangedEvent));
@@ -388,7 +556,7 @@
                         var nCPID = aei.ProcessId;
                         if (nCPID != this.processID)
                         {
-                            //Global.hostApp.Log(LogType.WRN, "Got {0} for {1} (Wrong process)", UIATools.GetEventShortName(e), UIATools.AEToString(ae));
+                            //hostApp.Log(LogType.WRN, "Got {0} for {1} (Wrong process)", UIATools.GetEventShortName(e), UIATools.AEToString(ae));
                             return;
                         }
                     }
@@ -411,8 +579,8 @@
 
                         if (sHash == this.lastEventKey)
                         {
-                            //Global.hostApp.Log(LogType.DBG, "Ignoring duplicate event {0} {1}", UIATools.GetEventShortName(e), UIATools.AEToString(ae));
-                            Global.hostApp.Log(LogType.DBG, "Ignoring duplicate event");
+                            //hostApp.Log(LogType.DBG, "Ignoring duplicate event {0} {1}", UIATools.GetEventShortName(e), UIATools.AEToString(ae));
+                            hostApp.Log(LogType.DBG, "Ignoring duplicate event");
                             return;
                         }
                         this.lastEventKey = sHash;
@@ -420,7 +588,7 @@
                         // Unexpected/unwanted dialog box squasher - Prompting for audio, host wants you to unmute, etc.
                         if ((aei.ControlType == ControlType.Window) && (aei.ClassName == "zChangeNameWndClass") && (!Controller.bWaitingForChangeNameDialog))
                         {
-                            Global.hostApp.Log(LogType.WRN, "Closing unexpected dialog 0x{0:X8} {1}", (uint)aei.NativeWindowHandle, UIATools.AEToString(ae));
+                            hostApp.Log(LogType.WRN, "Closing unexpected dialog 0x{0:X8} {1}", (uint)aei.NativeWindowHandle, UIATools.AEToString(ae));
                             WindowTools.CloseWindow((IntPtr)aei.NativeWindowHandle);
 
                             return;
@@ -432,7 +600,7 @@
                             var thisItemRid = UIATools.AERuntimeIDToString(ae.GetRuntimeId());
                             if (thisItemRid.StartsWith(sChatListRid))
                             {
-                                Global.hostApp.Log(LogType.DBG, "Chat < Got first message!");
+                                hostApp.Log(LogType.DBG, "Chat < Got first message!");
                                 aeCurrentChatMessageListItem = ae;
 
                                 // EXPERIMENTAL -- Unload event handler!
@@ -444,7 +612,7 @@
 
                         if (!this.isWatching)
                         {
-                            Global.hostApp.Log(LogType.DBG, "Ignoring event {0} (not watching)", sHash);
+                            hostApp.Log(LogType.DBG, "Ignoring event {0} (not watching)", sHash);
                             return;
                         }
 
@@ -458,12 +626,12 @@
                         this.eventQueue.Enqueue(evt);
                         this.eventWaitHandle.Set();
 
-                        Global.hostApp.Log(LogType.DBG, "*** EVENT ENQUEUE {0} {1}", UIATools.GetEventShortName(e), UIATools.AEToString(ae));
+                        hostApp.Log(LogType.DBG, "*** EVENT ENQUEUE {0} {1}", UIATools.GetEventShortName(e), UIATools.AEToString(ae));
                     }
                 }
                 catch (Exception ex)
                 {
-                    Global.hostApp.Log(LogType.ERR, "OnFocusChangedEvent - Unhandled Exception: {0}", ex.ToString());
+                    hostApp.Log(LogType.ERR, "OnFocusChangedEvent - Unhandled Exception: {0}", ex.ToString());
                 }
             }
 
@@ -524,7 +692,7 @@
                 lock (queueLock)
                 {
                     if (!isEventHandlerAdded) {
-                        Global.hostApp.Log(LogType.WRN, "EventWatcher.Start() called with no event handler in place.");
+                        hostApp.Log(LogType.WRN, "EventWatcher.Start() called with no event handler in place.");
                     }
 
                     InternalClear();
@@ -546,14 +714,14 @@
                         {
                             if (isEventHandlerAdded)
                             {
-                                Global.hostApp.Log(LogType.DBG, "Removing AE focus event handler");
+                                hostApp.Log(LogType.DBG, "Removing AE focus event handler");
                                 System.Windows.Automation.Automation.RemoveAutomationFocusChangedEventHandler(this.OnFocusChangedEvent);
                                 isEventHandlerAdded = false;
                             }
                         }
                         catch (Exception ex)
                         {
-                            Global.hostApp.Log(LogType.WRN, "Failed to remove AE focus event handler: {0}", repr(ex.ToString()));
+                            hostApp.Log(LogType.WRN, "Failed to remove AE focus event handler: {0}", repr(ex.ToString()));
                         }
                     }
                     isWatching = false;
@@ -775,7 +943,7 @@
             }
             catch (TimeoutException ex)
             {
-                Global.hostApp.Log(LogType.WRN, "Zoom was closed; Killing off any hung Zoom processes");
+                hostApp.Log(LogType.WRN, "Zoom was closed; Killing off any hung Zoom processes");
                 Kill();
 
                 throw new ZoomClosedException("Zoom Closed", ex);
@@ -793,7 +961,7 @@
             WindowTools.ShowWindow(hWnd, (uint)WindowTools.ShowCmd.SW_RESTORE); // TBD: Check if it needs to be shown or not
             if (hWnd == IntPtr.Zero)
             {
-                Global.hostApp.Log(LogType.INF, "GetChatPanelWindowHandle: Opening Panel");
+                hostApp.Log(LogType.INF, "GetChatPanelWindowHandle: Opening Panel");
                 WindowTools.SendKeys(GetZoomMeetingWindowHandle(), "%h");
 
                 hWnd = WindowTools.FindWindow(SZoomChatWindowClass, ReZoomChatWindowTitle, out _);
@@ -809,7 +977,7 @@
             WindowTools.ShowWindow(hWnd, (uint)WindowTools.ShowCmd.SW_RESTORE); // TBD: Check if it needs to be shown or not
             if (hWnd == IntPtr.Zero)
             {
-                Global.hostApp.Log(LogType.INF, "GetParticipantsPanelWindowHandle: Opening Panel");
+                hostApp.Log(LogType.INF, "GetParticipantsPanelWindowHandle: Opening Panel");
                 WindowTools.SendKeys(GetZoomMeetingWindowHandle(), "%u");
 
                 hWnd = WindowTools.FindWindow(SZoomParticipantsWindowClass, ReZoomParticipantsWindowTitle, out _);
@@ -864,7 +1032,7 @@
                  * TBD: Rationalize this format somehow?
                 if (!m.Success)
                 {
-                    Global.hostApp.Log(LogType.WRN, "Got ListItem that cannot be parsed: {0}", repr(sValue));
+                    hostApp.Log(LogType.WRN, "Got ListItem that cannot be parsed: {0}", repr(sValue));
                     return null;
                 }
                 */
@@ -934,7 +1102,7 @@
                     }
                     else
                     {
-                        Global.hostApp.Log(LogType.WRN, "GetParticipantFromListItem Status Element Value Unrecognized {0}", repr(i));
+                        hostApp.Log(LogType.WRN, "GetParticipantFromListItem Status Element Value Unrecognized {0}", repr(i));
                     }
                 }
             }
@@ -998,7 +1166,7 @@
 
             int nProcessed = 0;
             var sw = Stopwatch.StartNew();
-            Global.hostApp.Log(LogType.DBG, "WalkParticipantList - Enter");
+            hostApp.Log(LogType.DBG, "WalkParticipantList - Enter");
 
             try
             {
@@ -1025,7 +1193,7 @@
                 {
                     // TBD: How to handle two participants with the same name? There doesn't seem to be any kind of unique ID or "tie breaker" available in Zoom's UIA
                     nProcessed++;
-                    Global.hostApp.Log(LogType.DBG, "| GetParticipantFromListItem {0} {1}", listType.ToString(), repr(listItem.Cached.Name));
+                    hostApp.Log(LogType.DBG, "| GetParticipantFromListItem {0} {1}", listType.ToString(), repr(listItem.Cached.Name));
                     Participant p = GetParticipantFromListItem(ref listType, listItem);
 
                     /*
@@ -1045,7 +1213,7 @@
                     if (!participants.ContainsKey(p.name) && ExecuteQueuedIndividualParticipantActions(p))
                     {
                         // One or more actions were successfully executed; Particpant's state likely changed, so update & re-parse
-                        Global.hostApp.Log(LogType.DBG, "Reparsing participant after successful action(s)");
+                        hostApp.Log(LogType.DBG, "Reparsing participant after successful action(s)");
 
                         AutomationElement updatedListItem = null;
                         try
@@ -1054,18 +1222,18 @@
                         }
                         catch (Exception ex)
                         {
-                            Global.hostApp.Log(LogType.DBG, "Failed to re-process {0} {1}: {2}", listType.ToString(), repr(p.name), repr(ex.ToString()));
+                            hostApp.Log(LogType.DBG, "Failed to re-process {0} {1}: {2}", listType.ToString(), repr(p.name), repr(ex.ToString()));
                             continue;
                         }
 
                         p = GetParticipantFromListItem(ref listType, updatedListItem);
                         if (p == null)
                         {
-                            Global.hostApp.Log(LogType.DBG, "Failed to re-process {0} {1}", listType.ToString(), repr(p.name));
+                            hostApp.Log(LogType.DBG, "Failed to re-process {0} {1}", listType.ToString(), repr(p.name));
                             continue;
                         }
 
-                        Global.hostApp.Log(LogType.DBG, "| GetParticipantFromListItem {0} {1} (REPARSE)", listType.ToString(), repr(updatedListItem.Cached.Name));
+                        hostApp.Log(LogType.DBG, "| GetParticipantFromListItem {0} {1} (REPARSE)", listType.ToString(), repr(updatedListItem.Cached.Name));
                     }
 
                     if (p.isMe)
@@ -1084,7 +1252,7 @@
                     if (firstListItem == null)
                     {
                         // This should never happen, but just in case!
-                        Global.hostApp.Log(LogType.WRN, "WalkParticipantList - First list item is null; Cannot click");
+                        hostApp.Log(LogType.WRN, "WalkParticipantList - First list item is null; Cannot click");
                     }
                     else
                     {
@@ -1100,7 +1268,7 @@
             finally
             {
                 sw.Stop();
-                Global.hostApp.Log(LogType.DBG, "WalkParticipantList - Exit - Processed {0} item(s) in {1:0.000}s", nProcessed, sw.Elapsed.TotalSeconds);
+                hostApp.Log(LogType.DBG, "WalkParticipantList - Exit - Processed {0} item(s) in {1:0.000}s", nProcessed, sw.Elapsed.TotalSeconds);
             }
         }
 
@@ -1138,7 +1306,7 @@
                         break;
                     }
 
-                    Global.hostApp.Log(LogType.DBG, "(Attempt #{0}) Changing chat recipient from {1} to {2}", nAttempt, repr(sCurrentRecipient), repr(sTargetRecipient));
+                    hostApp.Log(LogType.DBG, "(Attempt #{0}) Changing chat recipient from {1} to {2}", nAttempt, repr(sCurrentRecipient), repr(sTargetRecipient));
 
                     WindowTools.ClickMiddle(IntPtr.Zero, aeChatRecipientControl.Current.BoundingRectangle);
 
@@ -1168,7 +1336,7 @@
                                     new PropertyCondition(AutomationElement.NameProperty, sTargetRecipient)) :
                                 (Condition)new PropertyCondition(AutomationElement.NameProperty, sTargetRecipient));
 
-                        Global.hostApp.Log(LogType.DBG, "SelectChatRecipient - About to select {0}", sTargetRecipient);
+                        hostApp.Log(LogType.DBG, "SelectChatRecipient - About to select {0}", sTargetRecipient);
                         var sip = (SelectionItemPattern)recipient.GetCurrentPattern(SelectionItemPatternIdentifiers.Pattern);
                         sip.Select();
 
@@ -1183,13 +1351,13 @@
                     catch (Exception ex)
                     {
                         // If we get an exception, just log it and try again
-                        Global.hostApp.Log(LogType.WRN, ex.ToString());
+                        hostApp.Log(LogType.WRN, ex.ToString());
                         continue;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Global.hostApp.Log(LogType.WRN, "(Attempt {0}) Failed to select chat recipient {0}: {1}", nAttempt, repr(sTargetRecipient), repr(ex.ToString()));
+                    hostApp.Log(LogType.WRN, "(Attempt {0}) Failed to select chat recipient {0}: {1}", nAttempt, repr(sTargetRecipient), repr(ex.ToString()));
                 }
             }
 
@@ -1244,7 +1412,7 @@
                     // If we've reached the max attempts, don't try again
                     if (ocm.attempt >= CHAT_MSG_MAX_ATTEMPTS)
                     {
-                        Global.hostApp.Log(LogType.ERR, "Chat > Giving up on message to {0}: {1}; Max attempts", repr(ocm.to), repr(ocm.msg));
+                        hostApp.Log(LogType.ERR, "Chat > Giving up on message to {0}: {1}; Max attempts", repr(ocm.to), repr(ocm.msg));
                         continue;
                     }
 
@@ -1252,7 +1420,7 @@
                     var nowDT = DateTime.UtcNow;
                     if (nowDT < ocm.lastAttemptDT.AddSeconds(CHAT_MSG_RETRY_DELAY_SECS))
                     {
-                        Global.hostApp.Log(LogType.DBG, "Chat > Too soon to re-send {0}: {1}", repr(ocm.to), repr(ocm.msg));
+                        hostApp.Log(LogType.DBG, "Chat > Too soon to re-send {0}: {1}", repr(ocm.to), repr(ocm.msg));
                         QRetry.Enqueue(ocm);
                         continue;
                     }
@@ -1266,13 +1434,13 @@
 
                         if (!participants.TryGetValue(ocm.to, out Participant p))
                         {
-                            Global.hostApp.Log(LogType.WRN, "Chat > Giving up on message to {0}: {1}; Paricipant is not in meeting", repr(ocm.to), repr(ocm.msg));
+                            hostApp.Log(LogType.WRN, "Chat > Giving up on message to {0}: {1}; Paricipant is not in meeting", repr(ocm.to), repr(ocm.msg));
                             continue;
                         }
 
                         if (p.device == ParticipantAudioDevice.Telephone)
                         {
-                            Global.hostApp.Log(LogType.WRN, "Chat > Giving up on message to {0}: {1}; Paricipant is dial-in only", repr(ocm.to), repr(ocm.msg));
+                            hostApp.Log(LogType.WRN, "Chat > Giving up on message to {0}: {1}; Paricipant is dial-in only", repr(ocm.to), repr(ocm.msg));
                             continue;
                         }
 
@@ -1283,7 +1451,7 @@
                         }
                     }
 
-                    Global.hostApp.Log(LogType.INF, "Chat > (Attempt #{0}) Sending message to {1}: {2}", repr(ocm.attempt), repr(ocm.to), repr(ocm.msg));
+                    hostApp.Log(LogType.INF, "Chat > (Attempt #{0}) Sending message to {1}: {2}", repr(ocm.attempt), repr(ocm.to), repr(ocm.msg));
 
                     SelectChatRecipient(ocm.to);
 
@@ -1312,12 +1480,12 @@
                 }
                 catch (Exception ex)
                 {
-                    Global.hostApp.Log(LogType.WRN, "Chat > (Attempt #{0}) Failed to send message to {1}: {2}; {3}", repr(ocm.attempt), repr(ocm.to), repr(ocm.msg), repr(ex.ToString()));
+                    hostApp.Log(LogType.WRN, "Chat > (Attempt #{0}) Failed to send message to {1}: {2}; {3}", repr(ocm.attempt), repr(ocm.to), repr(ocm.msg), repr(ex.ToString()));
 
                     /*
                     if (ocm.attempt >= 3)
                     {
-                        Global.hostApp.Log(LogType.ERR, "Giving up on message to {0}: {1}", repr(ocm.to), repr(ocm.msg));
+                        hostApp.Log(LogType.ERR, "Giving up on message to {0}: {1}", repr(ocm.to), repr(ocm.msg));
                     }
                     else
                     {
@@ -1372,7 +1540,7 @@
                         new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.List),
                         new PropertyCondition(AutomationElement.NameProperty, "chat text list")));
                 sChatListRid = UIATools.AERuntimeIDToString(aeChatMessageList.GetRuntimeId());
-                Global.hostApp.Log(LogType.DBG, "Got List RID: {0}", sChatListRid);
+                hostApp.Log(LogType.DBG, "Got List RID: {0}", sChatListRid);
                 sChatListRid += ",-1,"; // Example: 42,12980066,4,0,1,0,-1,0 - Where the final "0" is the zero-based index of the message number
 
                 aeChatRecipientControl = aeChatWindow.FindFirst(
@@ -1393,12 +1561,12 @@
             {
                 if (nMessageScanCount == 1)
                 {
-                    Global.hostApp.Log(LogType.DBG, "Chat < Scanning for pre-existing messages");
+                    hostApp.Log(LogType.DBG, "Chat < Scanning for pre-existing messages");
                 }
                 else if (nMessageScanCount == 4)
                 {
                     // It can take up to 5-10 secs for the event to fire, and we poll every 5s.  4 gives a little play at 15s
-                    Global.hostApp.Log(LogType.DBG, "Chat < No pre-existing messages found");
+                    hostApp.Log(LogType.DBG, "Chat < No pre-existing messages found");
                     bFirstChatMessageScan = false;
                 }
 
@@ -1412,7 +1580,7 @@
             }
 
             // If we got here, we have a chat message object.  Use it to find it's siblings and parse them
-            Global.hostApp.Log(LogType.DBG, "Chat < Parsing messages");
+            hostApp.Log(LogType.DBG, "Chat < Parsing messages");
             while (true)
             {
                 var sCurrentValue = aeCurrentChatMessageListItem.Current.Name;
@@ -1476,7 +1644,7 @@
 
                 if (bFirstChatMessageScan)
                 {
-                    Global.hostApp.Log(LogType.DBG, "Chat < First scan; Skipping pre-existing message from {0} to {1}: {2}", repr(sFrom), repr(sTo), repr(sNewMsgText));
+                    hostApp.Log(LogType.DBG, "Chat < First scan; Skipping pre-existing message from {0} to {1}: {2}", repr(sFrom), repr(sTo), repr(sNewMsgText));
                 }
                 else
                 {
@@ -1497,12 +1665,12 @@
                             // We trim the message in inbound text for various reasons; Also trim the outgoing message for comparison
                             var chatMsgText = ocm.msg.StripBlankLinesAndTrimSpace();
 
-                            Global.hostApp.Log(LogType.DBG, $"CHAT TX CHK To {repr(sTo)}/{repr(ocm.to)} Msg {repr(sNewMsgText)}/{repr(chatMsgText)}");
+                            hostApp.Log(LogType.DBG, $"CHAT TX CHK To {repr(sTo)}/{repr(ocm.to)} Msg {repr(sNewMsgText)}/{repr(chatMsgText)}");
 
                             // We use Contains here since inbound messages can be merged into one.  Ex: 1> MSG1; 2> MSG2; 3> MSG3 ; < MSG1\nMSG2\nMSG3
                             if ((ocm.to == sTo) && sNewMsgText.Contains(chatMsgText))
                             {
-                                Global.hostApp.Log(LogType.INF, $"Chat > Transmission confirmed after {repr(ocm.attempt)} attempt(s) for message to {repr(ocm.to)}: {repr(ocm.msg)}");
+                                hostApp.Log(LogType.INF, $"Chat > Transmission confirmed after {repr(ocm.attempt)} attempt(s) for message to {repr(ocm.to)}: {repr(ocm.msg)}");
 
                                 if (ocm.speak)
                                 {
@@ -1527,7 +1695,7 @@
                     foreach (var line in lines)
                     {
                         // We've got messages!  Fire an events for them
-                        Global.hostApp.Log(LogType.DBG, "Chat < Firing event for message from {0} to {1}: {2}", repr(sFrom), repr(sTo), repr(line));
+                        hostApp.Log(LogType.DBG, "Chat < Firing event for message from {0} to {1}: {2}", repr(sFrom), repr(sTo), repr(line));
 
                         ChatMessageReceive(null, new ChatEventArgs
                         {
@@ -1547,7 +1715,7 @@
             // Done processing messages
             bFirstChatMessageScan = false;
 
-            Global.hostApp.Log(LogType.DBG, $"Chat < Done parsing; new={ret}");
+            hostApp.Log(LogType.DBG, $"Chat < Done parsing; new={ret}");
             return ret;
         }
 
@@ -1584,13 +1752,13 @@
                     sTree = UIATools.WalkRawElementsToString(ae, true);
                 }
 
-                Global.hostApp.Log(LogType.WRN, "Closing unexpected dialog 0x{0:X8}; AETree {1}", (uint)hUnexpectedDialog, repr(sTree));
+                hostApp.Log(LogType.WRN, "Closing unexpected dialog 0x{0:X8}; AETree {1}", (uint)hUnexpectedDialog, repr(sTree));
                 WindowTools.CloseWindow(hUnexpectedDialog);
             }
 
             if ((aeParticipantsWindow == null) || (hWndParticipants != (IntPtr)aeParticipantsWindow.Current.NativeWindowHandle))
             {
-                Global.hostApp.Log(LogType.DBG, "UpdateParticipants - ae == null : {0}", aeParticipantsWindow == null);
+                hostApp.Log(LogType.DBG, "UpdateParticipants - ae == null : {0}", aeParticipantsWindow == null);
 
                 // 'LocalizedControlType' = 'list','Name' = 'Waiting Room list, use arrow key to navigate, and press tab for more options' Text: 'Waiting Room list, use arrow key to navigate, and press tab for more options'
                 //   'LocalizedControlType' = 'list item','Name' = 'Reagan' Text: 'Reagan'
@@ -1794,13 +1962,13 @@
                 }
 
                 sw.Stop();
-                Global.hostApp.Log(LogType.DBG, "UpdateParticipants - Updated ref for {0}/{1} list(s) in {2:0.000}s", nRefsUpdated, aePanes.Count, sw.Elapsed.TotalSeconds);
+                hostApp.Log(LogType.DBG, "UpdateParticipants - Updated ref for {0}/{1} list(s) in {2:0.000}s", nRefsUpdated, aePanes.Count, sw.Elapsed.TotalSeconds);
             }
 
             // Sanity checks
             if (aeParticipantsList == null)
             {
-                Global.hostApp.Log(LogType.DBG, "SKIPPED - Do not have attending list object yet");
+                hostApp.Log(LogType.DBG, "SKIPPED - Do not have attending list object yet");
                 return false;
             }
             else if (aeParticipantsList.Current.Name != "participant list, use arrow key to navigate, and press tab for more options")
@@ -1826,7 +1994,7 @@
 
             dtStart = DateTime.UtcNow;
 
-            Global.hostApp.Log(LogType.DBG, ".===== GetParticipantsFromList BEGIN =====");
+            hostApp.Log(LogType.DBG, ".===== GetParticipantsFromList BEGIN =====");
 
             // Only list items shown on the screen are returned when we query the participant list, so we:
             //    1. Start at the end of the list (press {END})
@@ -1862,7 +2030,7 @@
 
                     WindowTools.FocusWindow(hWndParticipants);
 
-                    if (!Global.cfg.DisableParticipantPaging)
+                    if (!cfg.DisableParticipantPaging)
                     {
                         WindowTools.SendKeys(IntPtr.Zero, nPage == 1 ? "{HOME}" : "{PGDN}");
                     }
@@ -1873,7 +2041,7 @@
                     nParsedParticipants = participants.Count;
 
                     var nNewParsedCount = nParsedParticipants - nLastParsedCount;
-                    Global.hostApp.Log(LogType.DBG, ">===== GetParticipantsFromList : Page {0}, {1} new item(s) parsed", nPage, nNewParsedCount);
+                    hostApp.Log(LogType.DBG, ">===== GetParticipantsFromList : Page {0}, {1} new item(s) parsed", nPage, nNewParsedCount);
 
 
                     // This no longer works
@@ -1881,14 +2049,14 @@
                     if (foundMe)
                     {
                         // We're searching from the bottom to the top, and my attendee list item will always be at the top, so we've hit the top of the list
-                        Global.hostApp.Log(LogType.DBG, "End of List : Found my own attendee entry");
+                        hostApp.Log(LogType.DBG, "End of List : Found my own attendee entry");
                         break;
                     }
                     */
                     if (nParsedParticipants >= nActualParticipants)
                     {
                         // We got the number of attendees we were looking for.  If we got more than expected, that's fine -- the list changes in place, unfortunately, so we can expect new attendees can join in the middle of our parsing
-                        Global.hostApp.Log(LogType.DBG, "End of List : Got expected number of attendees");
+                        hostApp.Log(LogType.DBG, "End of List : Got expected number of attendees");
                         break;
                     }
                     else if (nNewParsedCount == 0)
@@ -1899,11 +2067,11 @@
                         //   Try to make the best of it anyway
                         if (++nNoNewParseCount == 2)
                         {
-                            Global.hostApp.Log(LogType.WRN, "End of List : No new attendees parsed");
+                            hostApp.Log(LogType.WRN, "End of List : No new attendees parsed");
                             break;
                         }
 
-                        Global.hostApp.Log(LogType.WRN, "No new attendees parsed this page; Will try one more page");
+                        hostApp.Log(LogType.WRN, "No new attendees parsed this page; Will try one more page");
                     }
                 }
 
@@ -1911,7 +2079,7 @@
                 /*
                 if ((me == null) && (oldMe != null))
                 {
-                    Global.hostApp.Log(LogType.WRN, "I didn't find my own attendee entry this pass; Restoring my old participant object");
+                    hostApp.Log(LogType.WRN, "I didn't find my own attendee entry this pass; Restoring my old participant object");
                     me = oldMe;
                 }
                 */
@@ -1926,15 +2094,15 @@
                 // Check counts within tolerance (10%)
                 if (nParsedParticipants >= (int)(0.9 * nActualParticipants))
                 {
-                    Global.hostApp.Log(LogType.WRN, $"Parsed participant count {nParsedParticipants} does not match expected count {nActualParticipants}, but within tolerance (10%); Rollin' with it...");
+                    hostApp.Log(LogType.WRN, $"Parsed participant count {nParsedParticipants} does not match expected count {nActualParticipants}, but within tolerance (10%); Rollin' with it...");
                     break;
                 }
 
-                if (!Global.cfg.DisableParticipantPaging)
+                if (!cfg.DisableParticipantPaging)
                 {
                     if (nParsedParticipants < nActualParticipants)
                     {
-                        Global.hostApp.Log(LogType.WRN, $"Parsed participant count {nParsedParticipants} does not match expected count {nActualParticipants}, but DisableParticipantPaging=true; Rollin' with it...");
+                        hostApp.Log(LogType.WRN, $"Parsed participant count {nParsedParticipants} does not match expected count {nActualParticipants}, but DisableParticipantPaging=true; Rollin' with it...");
                     }
 
                     break;
@@ -1942,22 +2110,22 @@
 
                 // Sometimes items move around while we're trying to parse them, resulting in only a partial list of participants.  Use the count of participants
                 //   in the window title as a sanity check.  If the counts do not match, then scan again until they do, or until we time out
-                var nMaxAttempts = Global.cfg.ParticipantCountMismatchRetries > 1 ? Global.cfg.ParticipantCountMismatchRetries : 1;
+                var nMaxAttempts = cfg.ParticipantCountMismatchRetries > 1 ? cfg.ParticipantCountMismatchRetries : 1;
                 var sLogMsg = $"UpdateParticipants: Attempt #{nAttempt}/{nMaxAttempts} - Parsed participant count {nParsedParticipants} does not match expected count {nActualParticipants}";
                 if (nAttempt >= nMaxAttempts)
                 {
-                    Global.hostApp.Log(LogType.WRN, "{0}; Giving up", sLogMsg);
+                    hostApp.Log(LogType.WRN, "{0}; Giving up", sLogMsg);
 
                     // Just roll with what we have ...
                     break;
                 }
 
-                Global.hostApp.Log(LogType.WRN, "{0}; Trying again", sLogMsg);
+                hostApp.Log(LogType.WRN, "{0}; Trying again", sLogMsg);
             }
 
             nSecs = (DateTime.UtcNow - dtStart).TotalSeconds;
             nRate = (nSecs == 0) ? 0 : nParsedParticipants / nSecs;
-            Global.hostApp.Log(LogType.DBG, "`===== GetParticipantsFromList END =====' {0}/{1} attendee(s) in {2:0.000}s ({3:0.00}/s); {4} attempt(s)", nParsedParticipants, nActualParticipants, nSecs, nRate, nAttempt);
+            hostApp.Log(LogType.DBG, "`===== GetParticipantsFromList END =====' {0}/{1} attendee(s) in {2:0.000}s ({3:0.00}/s); {4} attempt(s)", nParsedParticipants, nActualParticipants, nSecs, nRate, nAttempt);
 
             // ====== WAITING LIST ======
 
@@ -2002,7 +2170,7 @@
             }
 
             //Dictionary<string, ZoomMeetingBotSDK.Participant> newList = new Dictionary<string, ZoomMeetingBotSDK.Participant>(ZoomMeetingBotSDK.participants);
-            Global.hostApp.Log(LogType.DBG, "UpdateParticipants - Exit");
+            hostApp.Log(LogType.DBG, "UpdateParticipants - Exit");
             return bChanged;
         }
 
@@ -2040,7 +2208,7 @@
                         new PropertyCondition(AutomationElement.ControlTypeProperty, type),
                         new PropertyCondition(AutomationElement.NameProperty, target)));
                 sw.Stop();
-                Global.hostApp.Log(LogType.DBG, "ClickParticipantItemControl - Subtree search for {0} completed in {1:0.000}s; Found={2}", repr(target), sw.ElapsedMilliseconds / 1000.0, aeButton != null);
+                hostApp.Log(LogType.DBG, "ClickParticipantItemControl - Subtree search for {0} completed in {1:0.000}s; Found={2}", repr(target), sw.ElapsedMilliseconds / 1000.0, aeButton != null);
 
                 if ((aeButton == null) && (!required))
                 {
@@ -2059,15 +2227,15 @@
                 patt.Invoke();
 
                 // Give UI a chance to process it
-                Thread.Sleep(Global.cfg.UIActionDelayMilliseconds);
+                Thread.Sleep(cfg.UIActionDelayMilliseconds);
 
                 return true;
             }
             catch (Exception ex)
             {
-                //Global.hostApp.Log(LogType.WRN, "Unable to invoke {0} for participant {1} : {2}", repr(target), repr(p.name), repr(ex.Message));
-                Global.hostApp.Log(LogType.WRN, "Unable to invoke {0} for participant {1} : {2}", repr(target), repr(p.name), repr(ex.ToString()));
-                Global.hostApp.Log(LogType.WRN, "TREE {0}", UIATools.WalkRawElementsToString(p._ae));
+                //hostApp.Log(LogType.WRN, "Unable to invoke {0} for participant {1} : {2}", repr(target), repr(p.name), repr(ex.Message));
+                hostApp.Log(LogType.WRN, "Unable to invoke {0} for participant {1} : {2}", repr(target), repr(p.name), repr(ex.ToString()));
+                hostApp.Log(LogType.WRN, "TREE {0}", UIATools.WalkRawElementsToString(p._ae));
                 return false;
             }
         }
@@ -2095,19 +2263,19 @@
                         if (currentName != target)
                         {
                             bNeedSearch = true;
-                            Global.hostApp.Log(LogType.WRN, "ClickParticipantWindowControl - Got cached AE for {0}, but Name is {1}; Forcing search", repr(target), repr(currentName));
+                            hostApp.Log(LogType.WRN, "ClickParticipantWindowControl - Got cached AE for {0}, but Name is {1}; Forcing search", repr(target), repr(currentName));
                         }
                     }
                     catch (ElementNotAvailableException)
                     {
                         bNeedSearch = true;
-                        Global.hostApp.Log(LogType.WRN, "ClickParticipantWindowControl - Got cached AE for {0}, but ElementNotAvailableException was thrown; Forcing search", repr(target));
+                        hostApp.Log(LogType.WRN, "ClickParticipantWindowControl - Got cached AE for {0}, but ElementNotAvailableException was thrown; Forcing search", repr(target));
                     }
                 }
                 else
                 {
                     bNeedSearch = true;
-                    Global.hostApp.Log(LogType.WRN, "ClickParticipantWindowControl - Doing Subtree search for {0}", repr(target));
+                    hostApp.Log(LogType.WRN, "ClickParticipantWindowControl - Doing Subtree search for {0}", repr(target));
                 }
 
                 if (bNeedSearch)
@@ -2146,7 +2314,7 @@
                             new PropertyCondition(AutomationElement.NameProperty, target)));
 
                     sw.Stop();
-                    Global.hostApp.Log(LogType.DBG, "ClickParticipantWindowControl - Subtree search for {0} completed in {1:0.000}s; Found={2}", repr(target), sw.ElapsedMilliseconds / 1000.0, ae != null);
+                    hostApp.Log(LogType.DBG, "ClickParticipantWindowControl - Subtree search for {0} completed in {1:0.000}s; Found={2}", repr(target), sw.ElapsedMilliseconds / 1000.0, ae != null);
                     if (ae == null)
                     {
                         if (CachedAE.ContainsKey(target))
@@ -2169,15 +2337,15 @@
                 ((InvokePattern)ae.GetCurrentPattern(InvokePattern.Pattern)).Invoke();
 
                 // Give UI a chance to process it
-                Thread.Sleep(Global.cfg.UIActionDelayMilliseconds);
+                Thread.Sleep(cfg.UIActionDelayMilliseconds);
                 //WindowTools.ClickMiddle(IntPtr.Zero, ae.Current.BoundingRectangle);
 
                 return true;
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.WRN, "Unable to invoke {0} in participants window : {1}", repr(target), repr(ex.Message));
-                Global.hostApp.Log(LogType.WRN, "TREE {0}", UIATools.WalkRawElementsToString(aeParticipantsWindow));
+                hostApp.Log(LogType.WRN, "Unable to invoke {0} in participants window : {1}", repr(target), repr(ex.Message));
+                hostApp.Log(LogType.WRN, "TREE {0}", UIATools.WalkRawElementsToString(aeParticipantsWindow));
                 return false;
             }
         }
@@ -2219,10 +2387,10 @@
 
             try
             {
-                Global.hostApp.Log(LogType.DBG, "InvokeMenuItem - WaitPopupMenu");
+                hostApp.Log(LogType.DBG, "InvokeMenuItem - WaitPopupMenu");
                 menu = WaitPopupMenu();
 
-                Global.hostApp.Log(LogType.DBG, "InvokeMenuItem - Finding MenuItem {0}", repr(sName));
+                hostApp.Log(LogType.DBG, "InvokeMenuItem - Finding MenuItem {0}", repr(sName));
                 // 2020.11.11 - v5.4.1 moved menu items under a Pane object, so we have to search descendants, not just children
                 //var menuItem = menu.FindFirst(TreeScope.Children, new PropertyCondition(AutomationElement.NameProperty, sName));
                 var menuItem = menu.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.NameProperty, sName));
@@ -2231,16 +2399,16 @@
                     throw new KeyNotFoundException("MenuItem does not exist");
                 }
 
-                Global.hostApp.Log(LogType.DBG, "InvokeMenuItem - Clicking MenuItem");
+                hostApp.Log(LogType.DBG, "InvokeMenuItem - Clicking MenuItem");
                 WindowTools.ClickMiddle(IntPtr.Zero, menuItem.Current.BoundingRectangle);
 
                 /* Doesn't work :(
-                Global.hostApp.Log(LogType.DBG, "InvokeMenuItem - Invoking MenuItem");
+                hostApp.Log(LogType.DBG, "InvokeMenuItem - Invoking MenuItem");
                 WindowTools.FocusWindow(new IntPtr(menu.Current.NativeWindowHandle));
                 ((InvokePattern)menuItem.GetCurrentPattern(InvokePattern.Pattern)).Invoke();
                 */
 
-                Global.hostApp.Log(LogType.DBG, "InvokeMenuItem - Clicked {0}", repr(menuItem.Current.Name));
+                hostApp.Log(LogType.DBG, "InvokeMenuItem - Clicked {0}", repr(menuItem.Current.Name));
             }
             catch (Exception ex)
             {
@@ -2264,7 +2432,7 @@
                     return ret;
                 }
 
-                Global.hostApp.Log(LogType.DBG, "Waiting for Mute All confirmation dialog");
+                hostApp.Log(LogType.DBG, "Waiting for Mute All confirmation dialog");
                 IntPtr hDialog = WindowTools.WaitWindow(SZoomConfirmMuteAllWindowClass, ReZoomConfirmMuteAllWindowTitle, out _); // Why zChangeNameWndClass?  That's weird...
                 AutomationElement aeDialog = AutomationElement.FromHandle(hDialog);
 
@@ -2292,9 +2460,9 @@
                 ((InvokePattern)aeButton.GetCurrentPattern(InvokePattern.Pattern)).Invoke();
 
                 // Give UI a chance to process it
-                Thread.Sleep(Global.cfg.UIActionDelayMilliseconds);
+                Thread.Sleep(cfg.UIActionDelayMilliseconds);
 
-                Global.hostApp.Log(LogType.DBG, "Successfully clicked Yes in MuteAll confirmation dialog");
+                hostApp.Log(LogType.DBG, "Successfully clicked Yes in MuteAll confirmation dialog");
 
                 ret = true;
             }
@@ -2388,7 +2556,7 @@
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.WRN, "Unable to reclaim host: {0}", repr(ex.ToString()));
+                hostApp.Log(LogType.WRN, "Unable to reclaim host: {0}", repr(ex.ToString()));
                 return false;
             }
         }
@@ -2433,7 +2601,7 @@
                 InvokeMenuItem(aeParticipantsWindow, "Rename");
 
                 // TBD: Move into a reusable function of some sort?
-                Global.hostApp.Log(LogType.DBG, "Waiting for Rename dialog");
+                hostApp.Log(LogType.DBG, "Waiting for Rename dialog");
                 IntPtr hDialog = WindowTools.WaitWindow(SZoomRenameWindowClass, ReZoomRenameWindowTitle, out _);
                 WindowTools.SendText(hDialog, name);
                 WindowTools.SendKeys(hDialog, "{ENTER}");
@@ -2442,7 +2610,7 @@
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.WRN, "Unable to rename participant {0}: {1}", repr(p.name), repr(ex.Message));
+                hostApp.Log(LogType.WRN, "Unable to rename participant {0}: {1}", repr(p.name), repr(ex.Message));
                 return false;
             }
         }
@@ -2484,7 +2652,7 @@
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.WRN, "Unable to rename participant {0}: {1}", repr(p.name), repr(ex.Message));
+                hostApp.Log(LogType.WRN, "Unable to rename participant {0}: {1}", repr(p.name), repr(ex.Message));
                 return false;
             }
         }
@@ -2512,7 +2680,7 @@
                 throw new Exception(err);
             }
 
-            Global.hostApp.Log(LogType.ERR, err);
+            hostApp.Log(LogType.ERR, err);
             return false;
         }
 
@@ -2533,7 +2701,7 @@
 
                 if (p.role == newRole)
                 {
-                    Global.hostApp.Log(LogType.WRN, "PromoteParticipant: Participant {0} is already {1}", repr(p.name), newRole.ToString());
+                    hostApp.Log(LogType.WRN, "PromoteParticipant: Participant {0} is already {1}", repr(p.name), newRole.ToString());
                     return true;
                 }
 
@@ -2543,17 +2711,17 @@
                 }
                 
                 // TBD: TEMP DEBUG
-                //Global.hostApp.Log(LogType.DBG, "CoHostParticipant AETree {0}", UIATools.WalkRawElementsToString(aeParticipantsWindow));
+                //hostApp.Log(LogType.DBG, "CoHostParticipant AETree {0}", UIATools.WalkRawElementsToString(aeParticipantsWindow));
 
                 // Make sure event handler knows not to squash this dialog
                 bWaitingForChangeNameDialog = true;
                 InvokeMenuItem(aeParticipantsWindow, promotionOption);
 
                 // TBD: Move into a reusable function of some sort?
-                Global.hostApp.Log(LogType.DBG, "Waiting for promotion confirmation dialog");
+                hostApp.Log(LogType.DBG, "Waiting for promotion confirmation dialog");
                 IntPtr hDialog = WindowTools.WaitWindow(SZoomConfirmCoHostWindowClass, ReZoomConfirmCoHostWindowTitle, out _); // Why zChangeNameWndClass?  That's weird...
                 AutomationElement aeDialog = AutomationElement.FromHandle(hDialog);
-                //Global.hostApp.Log(LogType.DBG, "Dialog: {0}", UIATools.WalkRawElementsToString(aeDialog));
+                //hostApp.Log(LogType.DBG, "Dialog: {0}", UIATools.WalkRawElementsToString(aeDialog));
 
                 // Make sure we got the dialog we were expecting
                 // TBD: Could squash the dialog if it's not what we expect and loop back to wait again
@@ -2579,15 +2747,15 @@
                 ((InvokePattern)aeButton.GetCurrentPattern(InvokePattern.Pattern)).Invoke();
 
                 // Give UI a chance to process it
-                Thread.Sleep(Global.cfg.UIActionDelayMilliseconds);
+                Thread.Sleep(cfg.UIActionDelayMilliseconds);
 
-                Global.hostApp.Log(LogType.DBG, "Successfully clicked Yes in Promote confirmation dialog");
+                hostApp.Log(LogType.DBG, "Successfully clicked Yes in Promote confirmation dialog");
 
                 return true;
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.WRN, "Unable to promote {0} to {1}: {2}", p.name, newRole.ToString(), repr(ex.Message));
+                hostApp.Log(LogType.WRN, "Unable to promote {0} to {1}: {2}", p.name, newRole.ToString(), repr(ex.Message));
                 return false;
             }
             finally
@@ -2619,7 +2787,7 @@
 
                 if (p.role == newRole)
                 {
-                    Global.hostApp.Log(LogType.WRN, "PromoteParticipant: Participant {0} is already {1}", repr(p.name), newRole.ToString());
+                    hostApp.Log(LogType.WRN, "PromoteParticipant: Participant {0} is already {1}", repr(p.name), newRole.ToString());
                     return true;
                 }
 
@@ -2635,7 +2803,7 @@
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.WRN, "Unable to promote {0} to {1}: {2}", p.name, newRole.ToString(), repr(ex.Message));
+                hostApp.Log(LogType.WRN, "Unable to promote {0} to {1}: {2}", p.name, newRole.ToString(), repr(ex.Message));
                 return false;
             }
             finally
@@ -2660,7 +2828,7 @@
                 if (p.role != ParticipantRole.CoHost)
                 {
                     //throw new Exception("Participant is not Co-Host");
-                    Global.hostApp.Log(LogType.WRN, "DemoteParticipant: Participant {0} is {1}, not Co-Host", repr(p.name), p.role.ToString());
+                    hostApp.Log(LogType.WRN, "DemoteParticipant: Participant {0} is {1}, not Co-Host", repr(p.name), p.role.ToString());
                     return true;
                 }
 
@@ -2677,7 +2845,7 @@
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.WRN, "Unable to demote {0}: {1}", p.name, repr(ex.Message));
+                hostApp.Log(LogType.WRN, "Unable to demote {0}: {1}", p.name, repr(ex.Message));
                 return false;
             }
             finally
@@ -2699,7 +2867,7 @@
 
                 if (p.role != ParticipantRole.CoHost)
                 {
-                    Global.hostApp.Log(LogType.WRN, "DemoteParticipant: Participant {0} is {1}, not Co-Host", repr(p.name), p.role.ToString());
+                    hostApp.Log(LogType.WRN, "DemoteParticipant: Participant {0} is {1}, not Co-Host", repr(p.name), p.role.ToString());
                     return true;
                 }
 
@@ -2712,7 +2880,7 @@
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.WRN, "Unable to co-host {0}: {1}", p.name, repr(ex.Message));
+                hostApp.Log(LogType.WRN, "Unable to co-host {0}: {1}", p.name, repr(ex.Message));
                 return false;
             }
             finally
@@ -2780,15 +2948,15 @@
 
             //Screen screen = Screen.AllScreens[0]; // Left-most screen
 
-            Screen screen = (Global.cfg.Screen == null) ? Screen.PrimaryScreen : Screen.AllScreens[int.Parse(Global.cfg.Screen)];
+            Screen screen = (cfg.Screen == null) ? Screen.PrimaryScreen : Screen.AllScreens[int.Parse(cfg.Screen)];
 
             Rectangle area = screen.WorkingArea;
 
-            Global.hostApp.Log(LogType.DBG, "=== CalcWindowLayout === ");
-            Global.hostApp.Log(LogType.DBG, "Screen: {0}", repr(screen));
-            Global.hostApp.Log(LogType.DBG, "Device Name: {0}", screen.DeviceName);
-            Global.hostApp.Log(LogType.DBG, "Bounds: {0}", screen.Bounds.ToString());
-            Global.hostApp.Log(LogType.DBG, "Area: {0}", area.ToString());
+            hostApp.Log(LogType.DBG, "=== CalcWindowLayout === ");
+            hostApp.Log(LogType.DBG, "Screen: {0}", repr(screen));
+            hostApp.Log(LogType.DBG, "Device Name: {0}", screen.DeviceName);
+            hostApp.Log(LogType.DBG, "Bounds: {0}", screen.Bounds.ToString());
+            hostApp.Log(LogType.DBG, "Area: {0}", area.ToString());
 
             int nBorderOffset = 7; // Windows have some invisible border around them; This compensates
 
@@ -2815,32 +2983,32 @@
             chatRect.Y = nAreaTop; // 0
             chatRect.Width = nChatWndWidth; // 370
             chatRect.Height = nAreaHeight + nChatWndHeightOfs; // 1047
-            Global.hostApp.Log(LogType.DBG, "ChatRect {0}", chatRect.ToString());
+            hostApp.Log(LogType.DBG, "ChatRect {0}", chatRect.ToString());
 
             partRect.X = chatRect.X - nPartWndWidth + (nPartWndWidthOfs * 2); // -749 -- Compensating for both sides
             partRect.Y = nAreaTop; // 0
             partRect.Width = nPartWndWidth; // 400
             partRect.Height = nAreaHeight + nPartWndHeightOfs; // 1047
-            Global.hostApp.Log(LogType.DBG, "PartRect {0}", partRect.ToString());
+            hostApp.Log(LogType.DBG, "PartRect {0}", partRect.ToString());
 
             zoomRect.X = nAreaLeft - nZoomWndWidthOfs; // 0
             zoomRect.Y = nAreaTop; // 0
             zoomRect.Width = nAreaWidth - Math.Abs(nAreaRight - partRect.X - nPartWndWidthOfs) + (nZoomWndWidthOfs * 2); // 1192
             zoomRect.Height = nAreaHalfHeight + nZoomWndHeightOfs; // 527
-            Global.hostApp.Log(LogType.DBG, "ZoomRect {0}", zoomRect.ToString());
+            hostApp.Log(LogType.DBG, "ZoomRect {0}", zoomRect.ToString());
 
             AppRect.X = nAreaLeft - nZoomWndWidthOfs; // 0
             AppRect.Y = nAreaMiddle; // 520
             AppRect.Width = nAreaWidth - Math.Abs(nAreaRight - partRect.X - nPartWndWidthOfs) + (nThisWndWidthOfs * 2); // 1192
             AppRect.Height = nAreaHeight - zoomRect.Height + nZoomWndHeightOfs + nThisWndHeightOfs; // 527
-            Global.hostApp.Log(LogType.DBG, "ThisRect {0}", AppRect.ToString());
+            hostApp.Log(LogType.DBG, "ThisRect {0}", AppRect.ToString());
         }
 
         private static IntPtr StartMeeting()
         {
             IntPtr ret;
 
-            if (Global.cfg.ZoomUsername != null)
+            if (cfg.ZoomUsername != null)
             {
                 ret = StartMeetingDirect();
             }
@@ -2856,7 +3024,7 @@
         {
             IntPtr hZoom = IntPtr.Zero;
             Process p = null;
-            string exePath = Environment.ExpandEnvironmentVariables(Global.cfg.ZoomExecutable);
+            string exePath = Environment.ExpandEnvironmentVariables(cfg.ZoomExecutable);
 
             for (int nAttempt = 1; nAttempt <= 5; nAttempt++)
             {
@@ -2865,13 +3033,13 @@
                     // If we're trying again, sleep 15s first to allow things to settle
                     if (nAttempt > 1)
                     {
-                        Global.hostApp.Log(LogType.INF, "Waiting for a bit before trying again");
+                        hostApp.Log(LogType.INF, "Waiting for a bit before trying again");
                         Thread.Sleep(15000);
                     }
 
-                    Global.hostApp.Log(LogType.INF, "Trying to start meeting via Zoom Launcher (Attempt #{0})", nAttempt);
+                    hostApp.Log(LogType.INF, "Trying to start meeting via Zoom Launcher (Attempt #{0})", nAttempt);
 
-                    Global.hostApp.Log(LogType.INF, "Starting: {0}", repr(exePath));
+                    hostApp.Log(LogType.INF, "Starting: {0}", repr(exePath));
 
                     p = Process.Start(exePath);
 
@@ -2883,7 +3051,7 @@
                         //   in under the wrong account.  Also, sometimes we're logged in but the token is expired, so when we try to join the meeting we'll get
                         //   prompted for the passcode.  Go ahead and log out.
 
-                        Global.hostApp.Log(LogType.WRN, "Main Window is already up; Must already be logged in.  Logging out");
+                        hostApp.Log(LogType.WRN, "Main Window is already up; Must already be logged in.  Logging out");
                         WindowTools.SendKeys(hZoom, new StringBuilder().Insert(0, "{TAB}", 2).Append(" {UP}{ENTER}").ToString());
 
                         Thread.Sleep(2500);
@@ -2893,23 +3061,23 @@
                         // Window wasn't found; we're good!
                     }
 
-                    Global.hostApp.Log(LogType.INF, "Waiting for Login window");
+                    hostApp.Log(LogType.INF, "Waiting for Login window");
                     hZoom = WindowTools.WaitWindow(SZoomLoginWindowClass, ReZoomLoginWindowTitle, out _, 15000, 1000);
 
                     // Select "Sign In"
                     WindowTools.SendKeys(hZoom, new StringBuilder().Insert(0, "{TAB}", 2).Append("{ENTER}").ToString());
 
                     // Send username
-                    WindowTools.SendKeys(hZoom, Global.cfg.ZoomUsername + "{TAB}");
+                    WindowTools.SendKeys(hZoom, cfg.ZoomUsername + "{TAB}");
 
                     // Send password
-                    WindowTools.SendKeys(hZoom, ProtectedString.Unprotect(Global.cfg.ZoomPassword), true);
+                    WindowTools.SendKeys(hZoom, ProtectedString.Unprotect(cfg.ZoomPassword), true);
 
                     // Login
                     WindowTools.SendKeys(hZoom, "{ENTER}");
 
                     // Wait for main window
-                    Global.hostApp.Log(LogType.INF, "Waiting for Menu window");
+                    hostApp.Log(LogType.INF, "Waiting for Menu window");
                     hZoom = WindowTools.WaitWindow(SZoomMenuWindowClass, ReZoomMenuWindowTitle, out _, 15000, 1000);
 
                     Thread.Sleep(2500);
@@ -2927,16 +3095,16 @@
                     Thread.Sleep(2500);
 
                     // Wait for join window
-                    Global.hostApp.Log(LogType.INF, "Waiting for Join dialog");
+                    hostApp.Log(LogType.INF, "Waiting for Join dialog");
                     hZoom = WindowTools.WaitWindow(SZoomJoinWindowClass, ReZoomJoinWindowTitle, out _, 15000, 1000);
 
                     // Enter Meeting ID
-                    WindowTools.SendKeys(hZoom, Global.cfg.MeetingID);
+                    WindowTools.SendKeys(hZoom, cfg.MeetingID);
 
                     // Set name (if needed)
-                    if (Global.cfg.MyParticipantName != null)
+                    if (cfg.MyParticipantName != null)
                     {
-                        WindowTools.SendKeys(hZoom, new StringBuilder().Insert(0, "{TAB}", 2).Append("+{HOME}").Append(Global.cfg.MyParticipantName).ToString());
+                        WindowTools.SendKeys(hZoom, new StringBuilder().Insert(0, "{TAB}", 2).Append("+{HOME}").Append(cfg.MyParticipantName).ToString());
                     }
 
                     // Join meeting
@@ -2947,26 +3115,26 @@
                 }
                 catch (Exception ex)
                 {
-                    Global.hostApp.Log(LogType.ERR, "Failed to open Zoom Launcher: {0}", repr(ex.ToString()));
+                    hostApp.Log(LogType.ERR, "Failed to open Zoom Launcher: {0}", repr(ex.ToString()));
                 }
                 finally
                 {
                     if (p != null)
                     {
-                        Global.hostApp.Log(LogType.INF, "Killing Zoom Launcher process");
+                        hostApp.Log(LogType.INF, "Killing Zoom Launcher process");
                         try
                         {
                             p.Kill();
                         }
                         catch (Exception ex)
                         {
-                            Global.hostApp.Log(LogType.ERR, "Failed to kill Zoom Launcher process: {0}", repr(ex.ToString()));
+                            hostApp.Log(LogType.ERR, "Failed to kill Zoom Launcher process: {0}", repr(ex.ToString()));
                         }
                         p = null;
                     }
                     if (hZoom != IntPtr.Zero)
                     {
-                        Global.hostApp.Log(LogType.INF, "Closing Zoom Launcher");
+                        hostApp.Log(LogType.INF, "Closing Zoom Launcher");
                         WindowTools.CloseWindow(hZoom);
                         hZoom = IntPtr.Zero;
                     }
@@ -2981,7 +3149,7 @@
         {
             IntPtr hChrome = IntPtr.Zero;
             Process p = null;
-            string exePath = Environment.ExpandEnvironmentVariables(Global.cfg.BrowserExecutable);
+            string exePath = Environment.ExpandEnvironmentVariables(cfg.BrowserExecutable);
 
             for (int nAttempt = 1; nAttempt <= 5; nAttempt++)
             {
@@ -2990,23 +3158,23 @@
                     // If we're trying again, sleep 15s first to allow things to settle
                     if (nAttempt > 1)
                     {
-                        Global.hostApp.Log(LogType.INF, "Waiting for a bit before trying again");
+                        hostApp.Log(LogType.INF, "Waiting for a bit before trying again");
                         Thread.Sleep(15000);
                     }
 
-                    Global.hostApp.Log(LogType.INF, "Trying to open Zoom with Chrome (Attempt #{0})", nAttempt);
+                    hostApp.Log(LogType.INF, "Trying to open Zoom with Chrome (Attempt #{0})", nAttempt);
 
-                    Global.hostApp.Log(LogType.INF, "Starting: {0}", repr(exePath));
+                    hostApp.Log(LogType.INF, "Starting: {0}", repr(exePath));
 
-                    p = Process.Start(exePath, Global.cfg.BrowserArguments);
+                    p = Process.Start(exePath, cfg.BrowserArguments);
 
-                    Global.hostApp.Log(LogType.INF, "Chrome Started; Finding Window");
+                    hostApp.Log(LogType.INF, "Chrome Started; Finding Window");
                     hChrome = WindowTools.WaitWindow(SChromeZoomWindowClass, ReChromeZoomWindowTitle, out string sChromeTitle, 30000, 1000);
                     p = null;
 
-                    Global.hostApp.Log(LogType.INF, "Chrome Window Title: {0}", sChromeTitle);
+                    hostApp.Log(LogType.INF, "Chrome Window Title: {0}", sChromeTitle);
 
-                    Global.hostApp.Log(LogType.INF, "Restoring Chrome Window");
+                    hostApp.Log(LogType.INF, "Restoring Chrome Window");
                     WindowTools.RestoreWindow(hChrome);
 
                     Thread.Sleep(1000);
@@ -3016,24 +3184,24 @@
 
                     if (sChromeTitle.StartsWith("Sign In "))
                     {
-                        Global.hostApp.Log(LogType.INF, "Logging in with Google");
+                        hostApp.Log(LogType.INF, "Logging in with Google");
                         hChrome = WindowTools.WaitWindow(SChromeZoomWindowClass, "My Meetings - Zoom - Google Chrome");
                         WindowTools.SendKeys(hChrome, new StringBuilder().Insert(0, "{TAB}", 9).Append("{ENTER}").ToString());
                     }
 
-                    Global.hostApp.Log(LogType.INF, "Starting meeting");
+                    hostApp.Log(LogType.INF, "Starting meeting");
                     WindowTools.SendKeys(hChrome, @"{F6}");
                     Thread.Sleep(1000);
 
-                    WindowTools.SendText("https://zoom.us/s/" + Global.cfg.MeetingID);
+                    WindowTools.SendText("https://zoom.us/s/" + cfg.MeetingID);
                     WindowTools.SendKeys(hChrome, "{ENTER}");
 
                     hChrome = WindowTools.WaitWindow(SChromeZoomWindowClass, "Launch Meeting - Zoom - Google Chrome");
 
-                    Global.hostApp.Log(LogType.INF, "Waiting for open prompt");
+                    hostApp.Log(LogType.INF, "Waiting for open prompt");
                     Thread.Sleep(3000);
 
-                    Global.hostApp.Log(LogType.INF, "Launching Zoom");
+                    hostApp.Log(LogType.INF, "Launching Zoom");
 
                     // The dialog used to have [ Open ] [ Cancel ], and [ Cancel ] is selected by default.  In a recent update,
                     //   a checkbox was added before these buttons, throwing our sequencing off.  Since we start with [ Cancel ],
@@ -3046,26 +3214,26 @@
                 }
                 catch (Exception ex)
                 {
-                    Global.hostApp.Log(LogType.ERR, "Failed to open Zoom: {0}", repr(ex.ToString()));
+                    hostApp.Log(LogType.ERR, "Failed to open Zoom: {0}", repr(ex.ToString()));
                 }
                 finally
                 {
                     if (p != null)
                     {
-                        Global.hostApp.Log(LogType.INF, "Killing Chrome process");
+                        hostApp.Log(LogType.INF, "Killing Chrome process");
                         try
                         {
                             p.Kill();
                         }
                         catch (Exception ex)
                         {
-                            Global.hostApp.Log(LogType.ERR, "Failed to kill Chrome process: {0}", repr(ex.ToString()));
+                            hostApp.Log(LogType.ERR, "Failed to kill Chrome process: {0}", repr(ex.ToString()));
                         }
                         p = null;
                     }
                     if (hChrome != IntPtr.Zero)
                     {
-                        Global.hostApp.Log(LogType.INF, "Closing Chrome");
+                        hostApp.Log(LogType.INF, "Closing Chrome");
                         WindowTools.CloseWindow(hChrome);
                         hChrome = IntPtr.Zero;
                     }
@@ -3079,6 +3247,12 @@
         public static void Start()
         {
             var bNeedStart = true;
+
+            WindowTools.WakeScreen();
+
+            Controller.CalcWindowLayout();
+            WindowTools.SetWindowSize(Process.GetCurrentProcess().MainWindowHandle, Controller.AppRect);
+
             hZoomMainWindow = IntPtr.Zero;
             try
             {
@@ -3105,32 +3279,32 @@
 
             if (bNeedStart)
             {
-                Global.hostApp.Log(LogType.INF, "Starting Zoom Meeting app");
+                hostApp.Log(LogType.INF, "Starting Zoom Meeting app");
                 hZoomMainWindow = StartMeeting();
             }
             else
             {
-                Global.hostApp.Log(LogType.INF, "Found running Zoom Meeting app");
+                hostApp.Log(LogType.INF, "Found running Zoom Meeting app");
             }
             ZoomAlreadyRunning = !bNeedStart;
 
             if (hZoomMainWindow == IntPtr.Zero)
             {
-                Global.hostApp.Log(LogType.CRT, "Failed to start Zoom; Bailing");
+                hostApp.Log(LogType.CRT, "Failed to start Zoom; Bailing");
                 return;
             }
 
             aeZoomMainWindow = AutomationElement.FromHandle(hZoomMainWindow);
             if (aeZoomMainWindow == null)
             {
-                Global.hostApp.Log(LogType.CRT, "Cannot get AutomationElement for Zoom Meeting Window; Bailing");
+                hostApp.Log(LogType.CRT, "Cannot get AutomationElement for Zoom Meeting Window; Bailing");
                 return;
             }
 
             nZoomPID = aeZoomMainWindow.Current.ProcessId;
             if (nZoomPID == 0)
             {
-                Global.hostApp.Log(LogType.CRT, "Cannot get Process ID for Zoom Meeting Window; Bailing");
+                hostApp.Log(LogType.CRT, "Cannot get Process ID for Zoom Meeting Window; Bailing");
                 return;
             }
 
@@ -3147,7 +3321,7 @@
 
             if (hAudioPrompt != IntPtr.Zero)
             {
-                Global.hostApp.Log(LogType.INF, "Audio Prompt Dialog found; Closing");
+                hostApp.Log(LogType.INF, "Audio Prompt Dialog found; Closing");
                 WindowTools.CloseWindow(hAudioPrompt);
                 //bAudioDisabled = true;
 
@@ -3162,7 +3336,7 @@
                 }
                 if (hAudioPrompt != IntPtr.Zero)
                 {
-                    Global.hostApp.Log(LogType.INF, "Audio Confirm Prompt Dialog found; Closing");
+                    hostApp.Log(LogType.INF, "Audio Confirm Prompt Dialog found; Closing");
                     WindowTools.CloseWindow(hAudioPrompt);
                     Thread.Sleep(500);
                 }
@@ -3191,13 +3365,13 @@
                     throw new Exception("Zoom is not running");
                 }
 
-                Global.hostApp.Log(LogType.INF, "LeaveMeeting - Sending close window message to Zoom");
+                hostApp.Log(LogType.INF, "LeaveMeeting - Sending close window message to Zoom");
                 WindowTools.CloseWindow(hZoomMainWindow);
 
-                Global.hostApp.Log(LogType.DBG, "LeaveMeeting - Waiting for confirmation dialog");
+                hostApp.Log(LogType.DBG, "LeaveMeeting - Waiting for confirmation dialog");
                 IntPtr hDialog = WindowTools.WaitWindow("zLeaveWndClass", "End Meeting or Leave Meeting?");
                 AutomationElement aeDialog = AutomationElement.FromHandle(hDialog);
-                //Global.hostApp.Log(LogType.DBG, "LeaveMeeting - Dialog: {0}", UIATools.WalkRawElementsToString(aeDialog));
+                //hostApp.Log(LogType.DBG, "LeaveMeeting - Dialog: {0}", UIATools.WalkRawElementsToString(aeDialog));
 
                 // Get AE for buttons: Pick "End Meeting for All" if it exists and endForAll is true, otherwise pick "Leave Meeting"
                 AutomationElement aeButton = null;
@@ -3223,35 +3397,35 @@
                 }
 
                 // Click it
-                Global.hostApp.Log(LogType.INF, "Leave Meeting - Clicking {0}", repr(sName));
+                hostApp.Log(LogType.INF, "Leave Meeting - Clicking {0}", repr(sName));
                 ((InvokePattern)aeButton.GetCurrentPattern(InvokePattern.Pattern)).Invoke();
 
                 // Give Zoom a bit to close down
-                Global.hostApp.Log(LogType.INF, "Waiting for a few seconds for Zoom to close down");
+                hostApp.Log(LogType.INF, "Waiting for a few seconds for Zoom to close down");
                 Thread.Sleep(10000);
 
                 // Close the "Zoom Cloud Meetings" dialog
                 /*
                 var dialogTitle = "Zoom Cloud Meetings";
-                Global.hostApp.Log(LogType.DBG, "Leave Meeting - Waiting for {0} dialog", repr(dialogTitle));
+                hostApp.Log(LogType.DBG, "Leave Meeting - Waiting for {0} dialog", repr(dialogTitle));
                 var hWnd = WindowTools.WaitWindow("ZPFTEWndClass", dialogTitle);
                 */
 
                 /* Doesn't work!
-                Global.hostApp.Log(LogType.DBG, "Leave Meeting - Closing Zoom dialog 0x{0:X8}", hWnd);
+                hostApp.Log(LogType.DBG, "Leave Meeting - Closing Zoom dialog 0x{0:X8}", hWnd);
                 WindowTools.QuitWindow(hWnd);
                 WindowTools.CloseWindow(hWnd);
                 */
 
                 /*
-                Global.hostApp.Log(LogType.DBG, "Leave Meeting - Finding PID for window handle 0x{0:X8}", hWnd);
+                hostApp.Log(LogType.DBG, "Leave Meeting - Finding PID for window handle 0x{0:X8}", hWnd);
                 _ = WindowTools.GetWindowThreadProcessId(hWnd, out uint pid);
                 if (pid == 0)
                 {
                     throw new Exception("Could not get PID for window handle");
                 }
 
-                Global.hostApp.Log(LogType.INF, "Leave Meeting - Killing Zoom process 0x{0:X8}", pid);
+                hostApp.Log(LogType.INF, "Leave Meeting - Killing Zoom process 0x{0:X8}", pid);
                 var p = System.Diagnostics.Process.GetProcessById((int)pid);
                 p.Kill();
                 if (!p.WaitForExit(10000))
@@ -3262,11 +3436,11 @@
 
                 Kill();
 
-                Global.hostApp.Log(LogType.INF, "Leave Meeting - Done!");
+                hostApp.Log(LogType.INF, "Leave Meeting - Done!");
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.ERR, "Leave Meeting - Failed; Exception: {0}", repr(ex.ToString()));
+                hostApp.Log(LogType.ERR, "Leave Meeting - Failed; Exception: {0}", repr(ex.ToString()));
             }
         }
 
@@ -3275,11 +3449,11 @@
         {
             if (hZoomMainWindow == IntPtr.Zero)
             {
-                Global.hostApp.Log(LogType.WRN, "Quit - Zoom is not running");
+                hostApp.Log(LogType.WRN, "Quit - Zoom is not running");
                 return;
             }
 
-            Global.hostApp.Log(LogType.INF, "Quit - Sending close window message to Zoom");
+            hostApp.Log(LogType.INF, "Quit - Sending close window message to Zoom");
             WindowTools.CloseWindow(hZoomMainWindow);
 
             // TBD: Handle prompt for who to hand off control to, or end meeting for all
@@ -3290,7 +3464,7 @@
         {
             if (nZoomPID != 0)
             {
-                Global.hostApp.Log(LogType.INF, "Kill - Killing Zoom by PID 0x{0:X8}", nZoomPID);
+                hostApp.Log(LogType.INF, "Kill - Killing Zoom by PID 0x{0:X8}", nZoomPID);
                 try
                 {
                     var p = System.Diagnostics.Process.GetProcessById(nZoomPID);
@@ -3302,14 +3476,14 @@
                 }
                 catch (Exception ex)
                 {
-                    Global.hostApp.Log(LogType.ERR, "Kill - Kill Zoom by PID failed; Exception: {0}", repr(ex.ToString()));
+                    hostApp.Log(LogType.ERR, "Kill - Kill Zoom by PID failed; Exception: {0}", repr(ex.ToString()));
                 }
             }
 
-            Global.hostApp.Log(LogType.INF, "Kill - Killing Zoom by process name");
+            hostApp.Log(LogType.INF, "Kill - Killing Zoom by process name");
             foreach (var p in Process.GetProcessesByName("Zoom"))
             {
-                Global.hostApp.Log(LogType.INF, "Kill - Killing Zoom by process name - Killing PID 0x{0:X8}", p.Id);
+                hostApp.Log(LogType.INF, "Kill - Killing Zoom by process name - Killing PID 0x{0:X8}", p.Id);
                 try
                 {
                     p.Kill();
@@ -3320,11 +3494,11 @@
                 }
                 catch (Exception ex)
                 {
-                    Global.hostApp.Log(LogType.ERR, "Kill - Kill Zoom by process name", repr(ex.ToString()));
+                    hostApp.Log(LogType.ERR, "Kill - Kill Zoom by process name", repr(ex.ToString()));
                 }
             }
 
-            Global.hostApp.Log(LogType.INF, "Kill - Done!");
+            hostApp.Log(LogType.INF, "Kill - Done!");
         }
 
         public static void LayoutWindows()
@@ -3336,16 +3510,16 @@
 
             IntPtr hWnd;
 
-            //Global.hostApp.Log(LogType.INF, "Sizing & Moving Zoom Meeting Window");
+            //hostApp.Log(LogType.INF, "Sizing & Moving Zoom Meeting Window");
             WindowTools.SetWindowSize(hZoomMainWindow, zoomRect);
             //Thread.Sleep(500);
 
-            //Global.hostApp.Log(LogType.INF, "Sizing & Moving Participant Window");
+            //hostApp.Log(LogType.INF, "Sizing & Moving Participant Window");
             hWnd = GetParticipantsPanelWindowHandle();
             WindowTools.SetWindowSize(hWnd, partRect);
             //Thread.Sleep(500);
 
-            //Global.hostApp.Log(LogType.INF, "Sizing & Moving Chat Window");
+            //hostApp.Log(LogType.INF, "Sizing & Moving Chat Window");
             hWnd = GetChatPanelWindowHandle();
             WindowTools.SetWindowSize(hWnd, chatRect);
             //Thread.Sleep(500);
@@ -3367,7 +3541,7 @@
             //var invokePattern = ((InvokePattern)aeChatEdit.GetCurrentPattern(InvokePatternIdentifiers.Pattern));
 
             var valuePattern = (ValuePattern)aeChatEdit.GetCurrentPattern(ValuePatternIdentifiers.Pattern);
-            Global.hostApp.Log(LogType.DBG, "valuePattern.Current={0}", repr(valuePattern.Current)); // Good news: We can read what's there!
+            hostApp.Log(LogType.DBG, "valuePattern.Current={0}", repr(valuePattern.Current)); // Good news: We can read what's there!
                                                                                                            //valuePattern.SetValue("Test!"); // ERROR: The method or operation is not implemented.
 
             var aeChatMessageList = aeChatWnd.FindFirst(
@@ -3395,7 +3569,7 @@
 
             // Always returns a blank list  :'(
             //var p = ((SelectionPattern)aeChatMessageList.GetCurrentPattern(SelectionPatternIdentifiers.Pattern));
-            //Global.hostApp.Log(LogType.DBG, "Current Selection (List): {0}", repr(p.Current.GetSelection()));
+            //hostApp.Log(LogType.DBG, "Current Selection (List): {0}", repr(p.Current.GetSelection()));
 
             //WindowTools.SendKeys("{TAB}{END}");
             while (true)
@@ -3403,30 +3577,75 @@
                 var evt = _eventWatcher.WaitEvent(5000);
                 if (evt == null)
                 {
-                    Global.hostApp.Log(LogType.DBG, "Timed out");
+                    hostApp.Log(LogType.DBG, "Timed out");
                     break;
                 }
                 var aei = evt.aei;
                 if (aei.ControlType == ControlType.ListItem)
                 {
-                    Global.hostApp.Log(LogType.DBG, "Got {0}", UIATools.AEToString(evt.ae));
+                    hostApp.Log(LogType.DBG, "Got {0}", UIATools.AEToString(evt.ae));
                     //var sibling = TreeWalker.RawViewWalker.GetNextSibling(evt.ae);
                     var sibling = TreeWalker.RawViewWalker.GetNextSibling(evt.ae);
-                    Global.hostApp.Log(LogType.DBG, "Got sibling {0}", UIATools.AEToString(sibling));
+                    hostApp.Log(LogType.DBG, "Got sibling {0}", UIATools.AEToString(sibling));
 
                     //var selectionItemPattern = ((SelectionItemPattern)evt.ae.GetCurrentPattern(SelectionItemPatternIdentifiers.Pattern));
                     //selectionItemPattern.Select(); // Does nothing -- Useless
 
                     // This is just a Pane with no patterns
-                    //Global.hostApp.Log(LogType.DBG, "Container for (List Item): {0}", UIATools.AEToString(selectionItemPattern.Current.SelectionContainer));
+                    //hostApp.Log(LogType.DBG, "Container for (List Item): {0}", UIATools.AEToString(selectionItemPattern.Current.SelectionContainer));
 
                     // Again, nothing
-                    // Global.hostApp.Log(LogType.DBG, "Current Selection (List): {0}", repr(p.Current.GetSelection()));
+                    // hostApp.Log(LogType.DBG, "Current Selection (List): {0}", repr(p.Current.GetSelection()));
                 }
             }
             _eventWatcher.Stop();
 
-            Global.hostApp.Log(LogType.DBG, "Chat Window UITree: {0}", UIATools.WalkRawElementsToString(aeChatWnd));
+            hostApp.Log(LogType.DBG, "Chat Window UITree: {0}", UIATools.WalkRawElementsToString(aeChatWnd));
+        }
+
+        public static void LogAETree()
+        {
+            var handles = new List<(IntPtr h, string name)>
+            {
+                (GetZoomMeetingWindowHandle(), "Main"),
+                (GetParticipantsPanelWindowHandle(), "Paticipants"),
+                (GetChatPanelWindowHandle(), "Chat"),
+            };
+
+            AutomationElement ae;
+
+            hostApp.Log(LogType.INF, "LogAETree : BEGIN");
+            foreach (var (h, name) in handles)
+            {
+                try
+                {
+                    ae = AutomationElement.FromHandle(h);
+                    hostApp.Log(LogType.INF, "LogAETree : {0}", UIATools.WalkRawElementsToString(ae));
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+            hostApp.Log(LogType.INF, "LogAETree : END");
+        }
+
+        public void Init(IHostApp app)
+        {
+            hostApp = app;
+            LoadSettings();
+
+            hostApp.SettingsChanged += HostApp_SettingsChanged;
+        }
+
+        private void HostApp_SettingsChanged(object sender, EventArgs e)
+        {
+            LoadSettings();
+        }
+
+        private void LoadSettings()
+        {
+            DeserializeDictToObject<ControllerConfigurationSettings>(hostApp.GetSettingsDic(), cfg);
         }
     }
 }

@@ -9,12 +9,16 @@
     using System.Threading;
     using static Utils;
     using ChatBot;
+    using ControlBot;
 
-    internal class UsherBot
+    public class UsherBot : IControlBot
     {
 #pragma warning disable SA1401 // Fields should be private
         public static volatile bool ShouldExit = false;
 #pragma warning restore SA1401 // Fields should be private
+
+        private static IHostApp hostApp;
+        private static Controller controller;
 
         private static readonly Dictionary<string, bool> GoodUsers = new Dictionary<string, bool>();
         private static readonly object _lock_eh = new object();
@@ -36,12 +40,69 @@
         /// </summary>
         private static string Topic = null;
 
+        [Flags]
+        public enum BotAutomationFlag
+        {
+            None = 0b0000000000,
+            RenameMyself = 0b0000000001,
+            ReclaimHost = 0b0000000010,
+            ProcessParticipants = 0b0000000100,
+            ProcessChat = 0b0000001000,
+            CoHostKnown = 0b0000010000,
+            AdmitKnown = 0b0000100000,
+            AdmitOthers = 0b0001000000,
+            Converse = 0b0010000000,
+            Speak = 0b0100000000,
+            UnmuteMyself = 0b1000000000,
+            All = 0b1111111111,
+        }
+
+        public class EmailCommandArgs
+        {
+            /// <summary>
+            /// Example for arguments.
+            /// </summary>
+            public string ArgsExample;
+
+            /// <summary>
+            /// Subject for the email.
+            /// </summary>
+            public string Subject;
+
+            /// <summary>
+            /// Body for the email.
+            /// </summary>
+            public string Body;
+        }
+
+        public class BotConfigurationSettings
+        {
+            public bool DebugLoggingEnabled = false;
+            public bool IsPaused = false;
+            public bool PromptOnStartup = false;
+            public int UnknownParticipantThrottleSecs = 15;
+            public int UnknownParticipantWaitSecs = 30;
+            public string MyParticipantName = "ZoomBot";
+            public BotAutomationFlag BotAutomationFlags = BotAutomationFlag.All;
+            public string MeetingID = null;
+            public int BroadcastCommandGuardTimeSecs = 300;
+            public string WaitingRoomAnnouncementMessage = null;
+            public int WaitingRoomAnnouncementDelaySecs = 60;
+            //public string Screen = null;
+        }
+
+        public static BotConfigurationSettings cfg = new BotConfigurationSettings();
+
+        private static Dictionary<string, string> oneTimeHiSequences = null;
+        private static Dictionary<string, string> broadcastCommands = null;
+        private static Dictionary<string, EmailCommandArgs> emailCommands = null;
+
         public static bool SetMode(string sName, bool bNewState)
         {
             if (sName == "citadel")
             {
                 // In Citadel mode, we do not automatically admit unknown participants
-                bool bCitadelMode = (Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.AdmitOthers) == 0;
+                bool bCitadelMode = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitOthers) == 0;
                 if (bCitadelMode == bNewState)
                 {
                     return false;
@@ -49,22 +110,22 @@
 
                 if (bNewState)
                 {
-                    Global.cfg.BotAutomationFlags ^= Global.BotAutomationFlag.AdmitOthers;
+                    cfg.BotAutomationFlags ^= BotAutomationFlag.AdmitOthers;
                 }
                 else
                 {
-                    Global.cfg.BotAutomationFlags |= Global.BotAutomationFlag.AdmitOthers;
+                    cfg.BotAutomationFlags |= BotAutomationFlag.AdmitOthers;
                 }
 
-                Global.hostApp.Log(LogType.INF, "Citadel mode {0}", bNewState ? "on" : "off");
+                hostApp.Log(LogType.INF, "Citadel mode {0}", bNewState ? "on" : "off");
                 return true;
             }
 
             if (sName == "lockdown")
             {
                 // In lockdown mode, don't automatically admit or cohost anybody
-                var botLockdownFlags = Global.BotAutomationFlag.AdmitOthers | Global.BotAutomationFlag.AdmitKnown | Global.BotAutomationFlag.CoHostKnown;
-                bool bLockdownMode = (Global.cfg.BotAutomationFlags & botLockdownFlags) == 0;
+                var botLockdownFlags = BotAutomationFlag.AdmitOthers | BotAutomationFlag.AdmitKnown | BotAutomationFlag.CoHostKnown;
+                bool bLockdownMode = (cfg.BotAutomationFlags & botLockdownFlags) == 0;
                 if (bLockdownMode == bNewState)
                 {
                     return false;
@@ -72,47 +133,47 @@
 
                 if (bNewState)
                 {
-                    Global.cfg.BotAutomationFlags ^= botLockdownFlags;
+                    cfg.BotAutomationFlags ^= botLockdownFlags;
                 }
                 else
                 {
-                    Global.cfg.BotAutomationFlags |= botLockdownFlags;
+                    cfg.BotAutomationFlags |= botLockdownFlags;
                 }
-                Global.hostApp.Log(LogType.INF, "Lockdown mode {0}", bNewState ? "on" : "off");
+                hostApp.Log(LogType.INF, "Lockdown mode {0}", bNewState ? "on" : "off");
                 return true;
             }
             if (sName == "debug")
             {
-                if (Global.cfg.DebugLoggingEnabled == bNewState)
+                if (cfg.DebugLoggingEnabled == bNewState)
                 {
                     return false;
                 }
 
-                Global.cfg.DebugLoggingEnabled = bNewState;
-                Global.hostApp.Log(LogType.INF, "Debug mode {0}", Global.cfg.DebugLoggingEnabled ? "on" : "off");
+                cfg.DebugLoggingEnabled = bNewState;
+                hostApp.Log(LogType.INF, "Debug mode {0}", cfg.DebugLoggingEnabled ? "on" : "off");
                 return true;
             }
             if (sName == "pause")
             {
-                if (Global.cfg.IsPaused == bNewState)
+                if (cfg.IsPaused == bNewState)
                 {
                     return false;
                 }
 
-                Global.cfg.IsPaused = bNewState;
-                Global.hostApp.Log(LogType.INF, "Pause mode {0}", Global.cfg.IsPaused ? "on" : "off");
+                cfg.IsPaused = bNewState;
+                hostApp.Log(LogType.INF, "Pause mode {0}", cfg.IsPaused ? "on" : "off");
                 return true;
             }
             if (sName == "passive")
             {
-                var bPassive = Global.cfg.BotAutomationFlags == Global.BotAutomationFlag.None;
+                var bPassive = cfg.BotAutomationFlags == BotAutomationFlag.None;
                 if (bPassive == bNewState)
                 {
                     return false;
                 }
 
-                Global.cfg.BotAutomationFlags = bPassive ? Global.BotAutomationFlag.None : Global.BotAutomationFlag.All;
-                Global.hostApp.Log(LogType.INF, "Passive mode {0}", bPassive ? "on" : "off");
+                cfg.BotAutomationFlags = bPassive ? BotAutomationFlag.None : BotAutomationFlag.All;
+                hostApp.Log(LogType.INF, "Passive mode {0}", bPassive ? "on" : "off");
                 return true;
             }
             throw new Exception(string.Format("Unknown mode: {0}", sName));
@@ -178,7 +239,7 @@
         //static private string sLastChatData = "";
         private static void DoChatActions()
         {
-            if ((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.ProcessChat) == 0)
+            if ((cfg.BotAutomationFlags & BotAutomationFlag.ProcessChat) == 0)
             {
                 return;
             }
@@ -193,7 +254,7 @@
         private static string FirstParticipantGreeted = null;
         private static void DoParticipantActions()
         {
-            if ((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.ProcessParticipants) == 0)
+            if ((cfg.BotAutomationFlags & BotAutomationFlag.ProcessParticipants) == 0)
             {
                 return;
             }
@@ -204,31 +265,31 @@
             {
                 // If I've got my own participant object, do any self-automation needed
 
-                if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.ReclaimHost) != 0) && (Controller.me.role != Controller.ParticipantRole.Host))
+                if (((cfg.BotAutomationFlags & BotAutomationFlag.ReclaimHost) != 0) && (Controller.me.role != Controller.ParticipantRole.Host))
                 {
                     // TBD: Throttle ReclaimHost attempts?
                     if (Controller.me.role == Controller.ParticipantRole.CoHost)
                     {
-                        Global.hostApp.Log(LogType.WRN, "BOT I'm Co-Host instead of Host; Trying to reclaim host");
+                        hostApp.Log(LogType.WRN, "BOT I'm Co-Host instead of Host; Trying to reclaim host");
                     }
                     else if (Controller.me.role == Controller.ParticipantRole.None)
                     {
-                        Global.hostApp.Log(LogType.WRN, "BOT I'm not Host or Co-Host; Trying to reclaim host");
+                        hostApp.Log(LogType.WRN, "BOT I'm not Host or Co-Host; Trying to reclaim host");
                     }
                     Controller.ReclaimHost();
                 }
 
-                if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.RenameMyself) != 0) && (Controller.me.name != Global.cfg.MyParticipantName))
+                if (((cfg.BotAutomationFlags & BotAutomationFlag.RenameMyself) != 0) && (Controller.me.name != cfg.MyParticipantName))
                 {
                     // Rename myself.  Event handler will type in the name when the dialog pops up
-                    Global.hostApp.Log(LogType.INF, "BOT Renaming myself from {0} to {1}", repr(Controller.me.name), repr(Global.cfg.MyParticipantName));
-                    Controller.RenameParticipant(Controller.me, Global.cfg.MyParticipantName);
+                    hostApp.Log(LogType.INF, "BOT Renaming myself from {0} to {1}", repr(Controller.me.name), repr(cfg.MyParticipantName));
+                    Controller.RenameParticipant(Controller.me, cfg.MyParticipantName);
                 }
 
-                if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.UnmuteMyself) != 0) && (Controller.me.audioStatus == Controller.ParticipantAudioStatus.Muted))
+                if (((cfg.BotAutomationFlags & BotAutomationFlag.UnmuteMyself) != 0) && (Controller.me.audioStatus == Controller.ParticipantAudioStatus.Muted))
                 {
                     // Unmute myself
-                    Global.hostApp.Log(LogType.INF, "BOT Unmuting myself");
+                    hostApp.Log(LogType.INF, "BOT Unmuting myself");
                     Controller.UnmuteParticipant(Controller.me);
                 }
 
@@ -247,8 +308,8 @@
 
                 string sCleanName = CleanUserName(p.name);
                 bool bAdmit = false;
-                bool bAdmitKnown = (Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.AdmitKnown) != 0;
-                bool bAdmitOthers = (Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.AdmitOthers) != 0;
+                bool bAdmitKnown = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitKnown) != 0;
+                bool bAdmitOthers = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitOthers) != 0;
 
                 if (p.status == Controller.ParticipantStatus.Waiting)
                 {
@@ -263,7 +324,7 @@
                     {
                         if (bAdmitKnown)
                         {
-                            Global.hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", repr(p.name));
+                            hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", repr(p.name));
                             if (Controller.AdmitParticipant(p))
                             {
                                 //SendTopic(p.name, false);
@@ -274,7 +335,7 @@
                     }
 
                     // Unknown user
-                    DateTime dtWhenToAdmit = p.dtWaiting.AddSeconds(Global.cfg.UnknownParticipantWaitSecs);
+                    DateTime dtWhenToAdmit = p.dtWaiting.AddSeconds(cfg.UnknownParticipantWaitSecs);
                     dtWhenToAdmit = dtWhenToAdmit > dtNextAdmission ? dtWhenToAdmit : dtNextAdmission;
                     bAdmit = dtWhenToAdmit >= dtNow;
 
@@ -292,14 +353,14 @@
                     // Make sure we don't display the message more than once
                     if (!HsParticipantMessages.Contains(sMsg))
                     {
-                        Global.hostApp.Log(LogType.INF, sMsg);
+                        hostApp.Log(LogType.INF, sMsg);
                         HsParticipantMessages.Add(sMsg);
                     }
 
                     if (bAdmit && Controller.AdmitParticipant(p))
                     {
                         HsParticipantMessages.Remove(sMsg); // After we admit the user, remove the message
-                        dtNextAdmission = dtNow.AddSeconds(Global.cfg.UnknownParticipantThrottleSecs);
+                        dtNextAdmission = dtNow.AddSeconds(cfg.UnknownParticipantThrottleSecs);
 
                         /*
                         // Participant was successfully admitted.  We want to send them the topic if one is set, but we can't do that
@@ -314,13 +375,13 @@
 
                 if (p.status == Controller.ParticipantStatus.Attending)
                 {
-                    if (((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.CoHostKnown) != 0) && (p.role == Controller.ParticipantRole.None) && (Controller.me.role == Controller.ParticipantRole.Host))
+                    if (((cfg.BotAutomationFlags & BotAutomationFlag.CoHostKnown) != 0) && (p.role == Controller.ParticipantRole.None) && (Controller.me.role == Controller.ParticipantRole.Host))
                     {
                         // If I'm host, and this user is not co-host, check if they should be
                         if (GoodUsers.TryGetValue(sCleanName, out bool bCoHost) && bCoHost)
                         {
                             // Yep, they should be, so do the promotion
-                            Global.hostApp.Log(LogType.INF, "BOT Promoting {0} to Co-host", repr(p.name));
+                            hostApp.Log(LogType.INF, "BOT Promoting {0} to Co-host", repr(p.name));
                             Controller.PromoteParticipant(p);
                         }
                     }
@@ -331,7 +392,7 @@
 
             if (bWaiting)
             {
-                string waitMsg = Global.cfg.WaitingRoomAnnouncementMessage;
+                string waitMsg = cfg.WaitingRoomAnnouncementMessage;
 
                 if (waitMsg == null)
                 {
@@ -343,7 +404,7 @@
                     return;
                 }
 
-                if (Global.cfg.WaitingRoomAnnouncementDelaySecs <= 0)
+                if (cfg.WaitingRoomAnnouncementDelaySecs <= 0)
                 {
                     return;
                 }
@@ -352,7 +413,7 @@
                 //   them, then do so now
 
                 dtNow = DateTime.UtcNow;
-                if (dtNow >= dtLastWaitingRoomAnnouncement.AddSeconds(Global.cfg.WaitingRoomAnnouncementDelaySecs))
+                if (dtNow >= dtLastWaitingRoomAnnouncement.AddSeconds(cfg.WaitingRoomAnnouncementDelaySecs))
                 {
                     Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInWaitingRoom, waitMsg);
                     dtLastWaitingRoomAnnouncement = dtNow;
@@ -378,7 +439,7 @@
 
                     Sound.Play("bootup");
                     Thread.Sleep(3000);
-                    Sound.Speak(Global.cfg.MyParticipantName + " online.");
+                    Sound.Speak(cfg.MyParticipantName + " online.");
                     Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInMeeting, true, msg);
                 }
             }
@@ -397,44 +458,43 @@
 
             if (!Monitor.TryEnter(_lock_eh))
             {
-                Global.hostApp.Log(LogType.WRN, "TimerIdleHandler {0:X4} - Busy; Will try again later", nTimerIterationID);
+                hostApp.Log(LogType.WRN, "TimerIdleHandler {0:X4} - Busy; Will try again later", nTimerIterationID);
                 return;
             }
 
             try
             {
-                //Global.hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - Enter");
+                //hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - Enter");
 
-                Global.LoadSettings();
                 LoadGoodUsers();
                 ReadRemoteCommands();
 
                 // Zoom is really bad about moving/resizing it's windows, so keep it in check
                 Controller.LayoutWindows();
 
-                if (Global.cfg.IsPaused)
+                if (cfg.IsPaused)
                 {
                     return;
                 }
 
-                //Global.hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - DoParticipantActions", nTimerIterationID);
+                //hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - DoParticipantActions", nTimerIterationID);
                 DoParticipantActions();
 
-                //Global.hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - DoChatActions", nTimerIterationID);
+                //hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - DoChatActions", nTimerIterationID);
                 DoChatActions();
             }
             catch (Controller.ZoomClosedException ex)
             {
-                Global.hostApp.Log(LogType.INF, ex.ToString());
+                hostApp.Log(LogType.INF, ex.ToString());
                 ShouldExit = true;
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.ERR, "TimerIdleHandler {0:X4} - Unhandled Exception: {1}", nTimerIterationID, ex.ToString());
+                hostApp.Log(LogType.ERR, "TimerIdleHandler {0:X4} - Unhandled Exception: {1}", nTimerIterationID, ex.ToString());
             }
             finally
             {
-                //Global.hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - Exit", nTimerIterationID);
+                //hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - Exit", nTimerIterationID);
                 Monitor.Exit(_lock_eh);
             }
         }
@@ -452,7 +512,7 @@
                 return;
             }
 
-            Global.hostApp.Log(LogType.INF, "Processing Remote Commands");
+            hostApp.Log(LogType.INF, "Processing Remote Commands");
 
             using (StreamReader sr = File.OpenText(sPath))
             {
@@ -486,18 +546,18 @@
                     }
                     else if (line == "exit")
                     {
-                        Global.hostApp.Log(LogType.INF, "Received {0} command", line);
+                        hostApp.Log(LogType.INF, "Received {0} command", line);
                         Controller.LeaveMeeting(false);
                         ShouldExit = true;
                     }
                     else if (line == "kill")
                     {
-                        Global.hostApp.Log(LogType.INF, "Received {0} command", line);
+                        hostApp.Log(LogType.INF, "Received {0} command", line);
                         Controller.LeaveMeeting(true);
                     }
                     else
                     {
-                        Global.hostApp.Log(LogType.ERR, "Unknown command: {0}", line);
+                        hostApp.Log(LogType.ERR, "Unknown command: {0}", line);
                     }
                 }
             }
@@ -530,7 +590,7 @@
 
             dtLastGoodUserMod = dtLastMod;
 
-            Global.hostApp.Log(LogType.INF, "(Re-)loading GoodUsers");
+            hostApp.Log(LogType.INF, "(Re-)loading GoodUsers");
 
             GoodUsers.Clear();
             using (StreamReader sr = File.OpenText(sPath))
@@ -579,13 +639,13 @@
 
         private static void OnMeetingOptionStateChange(object sender, Controller.MeetingOptionStateChangeEventArgs e)
         {
-            Global.hostApp.Log(LogType.INF, "Meeting option {0} changed to {1}", repr(e.optionName), e.newState.ToString());
+            hostApp.Log(LogType.INF, "Meeting option {0} changed to {1}", repr(e.optionName), e.newState.ToString());
         }
 
         private static void OnParticipantAttendanceStatusChange(object sender, Controller.ParticipantEventArgs e)
         {
             Controller.Participant p = e.participant;
-            Global.hostApp.Log(LogType.INF, "Participant {0} status {1}", repr(p.name), p.status.ToString());
+            hostApp.Log(LogType.INF, "Participant {0} status {1}", repr(p.name), p.status.ToString());
 
             // TBD: Could immediately admit recognized attendees
         }
@@ -671,6 +731,11 @@
         {
             string response = null;
 
+            if (oneTimeHiSequences == null)
+            {
+                return response;
+            }
+
             // Do one-time "hi" only once
             if (DicOneTimeHis.ContainsKey(to))
             {
@@ -680,7 +745,7 @@
             // Try to give a specific response
             foreach (var word in text.GetWordsInSentence())
             {
-                if (Global.cfg.OneTimeHiSequences.TryGetValue(word.ToLower(), out response))
+                if (oneTimeHiSequences.TryGetValue(word.ToLower(), out response))
                 {
                     break;
                 }
@@ -783,7 +848,7 @@
 
         private static void OnChatMessageReceive(object source, Controller.ChatEventArgs e)
         {
-            Global.hostApp.Log(LogType.INF, "New message from {0} to {1}: {2}", repr(e.from), repr(e.to), repr(e.text));
+            hostApp.Log(LogType.INF, "New message from {0} to {1}: {2}", repr(e.from), repr(e.to), repr(e.text));
 
             string sTo = e.to;
             string sFrom = e.from;
@@ -804,7 +869,7 @@
             if (!e.isPrivate)
             {
                 // Message is to everyone (public), bail if my name is not in it
-                var withoutMyName = Regex.Replace(sMsg, @"\b" + Global.cfg.MyParticipantName + @"\b", string.Empty, RegexOptions.IgnoreCase);
+                var withoutMyName = Regex.Replace(sMsg, @"\b" + cfg.MyParticipantName + @"\b", string.Empty, RegexOptions.IgnoreCase);
 
                 // If strings are the same, it's not to me
                 if (withoutMyName == sMsg)
@@ -840,14 +905,17 @@
                 var response = OneTimeHi(sMsg, sFrom);
 
                 // Handle canned responses based on broadcast keywords.  TBD: Move this into a bot
-                foreach (var broadcastCommand in Global.cfg.BroadcastCommands)
+                if (broadcastCommands != null)
                 {
-                    if (FastRegex.IsMatch($"\\b${broadcastCommand.Key}\\b", sMsg, RegexOptions.IgnoreCase))
+                    foreach (var broadcastCommand in broadcastCommands)
                     {
-                        response = broadcastCommand.Value;
+                        if (FastRegex.IsMatch($"\\b${broadcastCommand.Key}\\b", sMsg, RegexOptions.IgnoreCase))
+                        {
+                            response = broadcastCommand.Value;
 
-                        // Don't want to speak broadcast messages
-                        speak = false;
+                            // Don't want to speak broadcast messages
+                            speak = false;
+                        }
                     }
                 }
 
@@ -887,13 +955,13 @@
                             break;
                         }
 
-                        Global.hostApp.Log(LogType.WRN, $"ChatBot converse with {repr(chatBot.GetChatBotInfo().Name)} failed: {repr(failureMsg)}");
+                        hostApp.Log(LogType.WRN, $"ChatBot converse with {repr(chatBot.GetChatBotInfo().Name)} failed: {repr(failureMsg)}");
                     }
                 }
 
                 if (response == null)
                 {
-                    Global.hostApp.Log(LogType.ERR, "No ChatBot was able to produce a response");
+                    hostApp.Log(LogType.ERR, "No ChatBot was able to produce a response");
                 }
 
                 Controller.SendChatMessage(sReplyTo, speak, FormatChatResponse(response, sFrom));
@@ -917,13 +985,13 @@
             // Only allow admin users to run the following commands
             if (!bAdmin)
             {
-                Global.hostApp.Log(LogType.WRN, "Ignoring command {0} from non-admin {1}", repr(sMsg), repr(sFrom));
+                hostApp.Log(LogType.WRN, "Ignoring command {0} from non-admin {1}", repr(sMsg), repr(sFrom));
                 return;
             }
 
             if (!Controller.participants.TryGetValue(sFrom, out Controller.Participant sender))
             {
-                Global.hostApp.Log(LogType.ERR, "Received command {0} from {1}, but I don't have a Participant class for them", repr(sMsg), repr(e.from));
+                hostApp.Log(LogType.ERR, "Received command {0} from {1}, but I don't have a Participant class for them", repr(sMsg), repr(e.from));
                 return;
             }
 
@@ -934,13 +1002,13 @@
             // All of the following commands require an argument
             string sTarget = (a.Length == 1) ? null : (a[1].Length == 0 ? null : a[1]);
 
-            if (Global.cfg.BroadcastCommands.TryGetValue(sCommand, out string sBroadcastMsg))
+            if ((broadcastCommands != null) && broadcastCommands.TryGetValue(sCommand, out string sBroadcastMsg))
             {
                 DateTime dtNow = DateTime.UtcNow;
 
                 if (BroadcastSentTime.TryGetValue(sCommand, out DateTime dtSentTime))
                 {
-                    int guardTime = Global.cfg.BroadcastCommandGuardTimeSecs;
+                    int guardTime = cfg.BroadcastCommandGuardTimeSecs;
 
                     if (guardTime < 0)
                     {
@@ -948,7 +1016,7 @@
                         return;
                     }
 
-                    if ((guardTime > 0) && (dtNow <= dtSentTime.AddSeconds(Global.cfg.BroadcastCommandGuardTimeSecs)))
+                    if ((guardTime > 0) && (dtNow <= dtSentTime.AddSeconds(cfg.BroadcastCommandGuardTimeSecs)))
                     {
                         Controller.SendChatMessage(sender.name, $"{sCommand}: This broadcast message was already sent recently. Please try again later.");
                         return;
@@ -1026,38 +1094,41 @@
                 return;
             }
 
-            if (Global.cfg.EmailCommands.TryGetValue(sCommand, out Global.EmailCommandArgs emailCommandArgs))
+            if (emailCommands != null)
             {
-                string[] args = sTarget.Trim().Split(SpaceDelim, 2);
-
-                string toAddress = args[0];
-                string subject = emailCommandArgs.Subject;
-                string body = emailCommandArgs.Body;
-
-                if (subject.Contains("{0}") || body.Contains("{0}"))
+                if (emailCommands.TryGetValue(sCommand, out EmailCommandArgs emailCommandArgs))
                 {
-                    if (args.Length <= 1)
+                    string[] args = sTarget.Trim().Split(SpaceDelim, 2);
+
+                    string toAddress = args[0];
+                    string subject = emailCommandArgs.Subject;
+                    string body = emailCommandArgs.Body;
+
+                    if (subject.Contains("{0}") || body.Contains("{0}"))
                     {
-                        Controller.SendChatMessage(sender.name, $"Error: The format of the command is incorrect; Correct example: /{sCommand} {emailCommandArgs.ArgsExample}");
-                        return;
+                        if (args.Length <= 1)
+                        {
+                            Controller.SendChatMessage(sender.name, $"Error: The format of the command is incorrect; Correct example: /{sCommand} {emailCommandArgs.ArgsExample}");
+                            return;
+                        }
+
+                        string emailArg = args[1].Trim();
+                        subject = subject.Replace("{0}", emailArg);
+                        body = body.Replace("{0}", emailArg);
                     }
 
-                    string emailArg = args[1].Trim();
-                    subject = subject.Replace("{0}", emailArg);
-                    body = body.Replace("{0}", emailArg);
-                }
-
-                if (SendEmail(subject, body, toAddress))
-                {
-                    Controller.SendChatMessage(sender.name, $"{sCommand}: Successfully sent email to {toAddress}");
-                }
-                else
-                {
-                    Controller.SendChatMessage(sender.name, $"{sCommand}: Failed to send email to {toAddress}");
-                }
+                    if (SendEmail(subject, body, toAddress))
+                    {
+                        Controller.SendChatMessage(sender.name, $"{sCommand}: Successfully sent email to {toAddress}");
+                    }
+                    else
+                    {
+                        Controller.SendChatMessage(sender.name, $"{sCommand}: Failed to send email to {toAddress}");
+                    }
 
 
-                return;
+                    return;
+                }
             }
 
             if ((sCommand == "citadel") || (sCommand == "lockdown") || (sCommand == "passive"))
@@ -1096,9 +1167,9 @@
 
                 if ((sWaitMsg.Length == 0) || (sWaitMsg.ToLower() == "off"))
                 {
-                    if ((Global.cfg.WaitingRoomAnnouncementMessage != null) && (Global.cfg.WaitingRoomAnnouncementMessage.Length > 0))
+                    if ((cfg.WaitingRoomAnnouncementMessage != null) && (cfg.WaitingRoomAnnouncementMessage.Length > 0))
                     {
-                        Global.cfg.WaitingRoomAnnouncementMessage = null;
+                        cfg.WaitingRoomAnnouncementMessage = null;
                         Controller.SendChatMessage(sender.name, "Waiting room message has been turned off");
                     }
                     else
@@ -1106,13 +1177,13 @@
                         Controller.SendChatMessage(sender.name, "Waiting room message is already off");
                     }
                 }
-                else if (sWaitMsg == Global.cfg.WaitingRoomAnnouncementMessage)
+                else if (sWaitMsg == cfg.WaitingRoomAnnouncementMessage)
                 {
                     Controller.SendChatMessage(sender.name, "Waiting room message is already set to:\n{0}", sTarget);
                 }
                 else
                 {
-                    Global.cfg.WaitingRoomAnnouncementMessage = sTarget.Trim();
+                    cfg.WaitingRoomAnnouncementMessage = sTarget.Trim();
                     Controller.SendChatMessage(sender.name, "Waiting room message has set to:\n{0}", sTarget);
                 }
                 return;
@@ -1298,18 +1369,18 @@
                 FileInfo[] files = subdir.GetFiles("ZoomMeetingBotSDK.ChatBot.*.dll");
                 if (files.Length > 1)
                 {
-                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {repr(subdir.FullName)}; More than one DLL found");
+                    hostApp.Log(LogType.WRN, $"Cannot load bot in {repr(subdir.FullName)}; More than one DLL found");
                 }
                 else if (files.Length == 0)
                 {
-                    Global.hostApp.Log(LogType.WRN, $"Cannot load bot in {repr(subdir.FullName)}; No DLL found");
+                    hostApp.Log(LogType.WRN, $"Cannot load bot in {repr(subdir.FullName)}; No DLL found");
                 }
                 else
                 {
                     var file = files[0];
                     try
                     {
-                        Global.hostApp.Log(LogType.DBG, $"Loading {file.Name}");
+                        hostApp.Log(LogType.DBG, $"Loading {file.Name}");
                         var assembly = Assembly.LoadFile(file.FullName);
                         var types = assembly.GetTypes();
                         foreach (var type in types)
@@ -1319,18 +1390,19 @@
                             {
                                 var chatBot = Activator.CreateInstance(type) as IChatBot;
                                 var chatBotInfo = chatBot.GetChatBotInfo();
-                                chatBot.Start(new ChatBotInitParam()
+                                chatBot.Init(new ChatBotInitParam()
                                 {
-                                    hostApp = Global.hostApp,
+                                    hostApp = hostApp,
                                 });
-                                Global.hostApp.Log(LogType.DBG, $"Loaded {repr(chatBotInfo.Name)} chatbot with intelligence level {chatBotInfo.IntelligenceLevel}");
+                                hostApp.Log(LogType.DBG, $"Loaded {repr(chatBotInfo.Name)} chatbot with intelligence level {chatBotInfo.IntelligenceLevel}");
+                                chatBot.Start();
                                 bots.Add(new Tuple<int, IChatBot>(chatBotInfo.IntelligenceLevel, chatBot));
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Global.hostApp.Log(LogType.ERR, $"Failed to load {repr(file.FullName)}: {repr(ex.ToString())}");
+                        hostApp.Log(LogType.ERR, $"Failed to load {repr(file.FullName)}: {repr(ex.ToString())}");
                     }
                 }
             }
@@ -1343,42 +1415,6 @@
             return bots.OrderByDescending(o => o.Item1).Select(x => x.Item2).ToList();
         }
 
-        public static void SettingsUpdated()
-        {
-            if (chatBots != null)
-            {
-                // We'll try each bot in order by intelligence level until one of them works
-                foreach (var chatBot in chatBots)
-                {
-                    try
-                    {
-                        chatBot.SettingsUpdated();
-                    }
-                    catch (Exception ex)
-                    {
-                        Global.hostApp.Log(LogType.ERR, $"SettingsNotify failed: {repr(ex.ToString())}");
-                    }
-                }
-            }
-        }
-
-        public static void Run()
-        {
-            if ((Global.cfg.BotAutomationFlags & Global.BotAutomationFlag.Converse) != 0)
-            {
-                chatBots = GetChatBots();
-            }
-
-            Controller.ParticipantAttendanceStatusChange += OnParticipantAttendanceStatusChange;
-            Controller.ChatMessageReceive += OnChatMessageReceive;
-            Controller.MeetingOptionStateChange += OnMeetingOptionStateChange;
-            Controller.Start();
-
-            tmrIdle = new System.Threading.Timer(TimerIdleHandler, null, 0, 5000);
-
-            return;
-        }
-
         /// <summary>
         /// Leaves the meeting, optionally ending meeting or passing off Host role to another participant.
         /// </summary>
@@ -1388,11 +1424,11 @@
             {
                 if (Controller.me.role != Controller.ParticipantRole.Host)
                 {
-                    Global.hostApp.Log(LogType.DBG, "BOT LeaveMeeting - I am not host");
+                    hostApp.Log(LogType.DBG, "BOT LeaveMeeting - I am not host");
                 }
                 else
                 {
-                    Global.hostApp.Log(LogType.DBG, "BOT LeaveMeeting - I am host; Trying to find someone to pass it to");
+                    hostApp.Log(LogType.DBG, "BOT LeaveMeeting - I am host; Trying to find someone to pass it to");
 
                     Controller.Participant altHost = null;
                     foreach (Controller.Participant p in Controller.participants.Values)
@@ -1406,27 +1442,27 @@
 
                     if (altHost == null)
                     {
-                        Global.hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Could not find an alternative host; Ending meeting");
+                        hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Could not find an alternative host; Ending meeting");
                         endForAll = true;
                     }
                     else
                     {
                         try
                         {
-                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passing Host to {0}", repr(altHost.name));
+                            hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passing Host to {0}", repr(altHost.name));
                             Controller.PromoteParticipant(altHost, Controller.ParticipantRole.Host);
-                            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passed Host to {0}", repr(altHost.name));
+                            hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passed Host to {0}", repr(altHost.name));
                         }
                         catch (Exception ex)
                         {
-                            Global.hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Failed to pass Host to {0}; Ending meeting", repr(altHost.name));
+                            hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Failed to pass Host to {0}; Ending meeting", repr(altHost.name));
                             endForAll = true;
                         }
                     }
                 }
             }
 
-            Global.hostApp.Log(LogType.INF, "BOT LeaveMeeting - Leaving Meeting");
+            hostApp.Log(LogType.INF, "BOT LeaveMeeting - Leaving Meeting");
             Controller.LeaveMeeting(endForAll);
         }
 
@@ -1450,15 +1486,79 @@
                     gmailSender = new GmailSenderLib.GmailSender(System.Reflection.Assembly.GetCallingAssembly().GetName().Name);
                 }
 
-                Global.hostApp.Log(LogType.ERR, "SendEmail - Sending email to {0} with subject {1}", repr(to), repr(subject));
+                hostApp.Log(LogType.ERR, "SendEmail - Sending email to {0} with subject {1}", repr(to), repr(subject));
                 gmailSender.Send(new GmailSenderLib.SimpleMailMessage(subject, body, to));
 
                 return true;
             }
             catch (Exception ex)
             {
-                Global.hostApp.Log(LogType.ERR, "SendEmail - Failed; Exception: {0}", repr(ex.ToString()));
+                hostApp.Log(LogType.ERR, "SendEmail - Failed; Exception: {0}", repr(ex.ToString()));
                 return false;
+            }
+        }
+
+        public void Init(ControlBotInitParam param)
+        {
+            hostApp = param.hostApp;
+            LoadSettings();
+
+            hostApp.SettingsChanged += new EventHandler(SettingsChanged);
+
+            controller = new Controller();
+            controller.Init(hostApp);
+        }
+
+        public void Start()
+        {
+            if ((cfg.BotAutomationFlags & BotAutomationFlag.Converse) != 0)
+            {
+                chatBots = GetChatBots();
+            }
+
+            Controller.ParticipantAttendanceStatusChange += OnParticipantAttendanceStatusChange;
+            Controller.ChatMessageReceive += OnChatMessageReceive;
+            Controller.MeetingOptionStateChange += OnMeetingOptionStateChange;
+            Controller.Start();
+
+            tmrIdle = new System.Threading.Timer(TimerIdleHandler, null, 0, 5000);
+
+            return;
+        }
+
+        public void Stop()
+        {
+            ShouldExit = true;
+        }
+
+        public void SettingsChanged(object sender, EventArgs e)
+        {
+            LoadSettings();
+        }
+
+        private void LoadSettings()
+        {
+            var dic = hostApp.GetSettingsDic();
+            DeserializeDictToObject<BotConfigurationSettings>(dic, cfg);
+
+            oneTimeHiSequences = DynDicValueToStrDic(dic, "OneTimeHiSequences");
+            ExpandDictionaryPipes(oneTimeHiSequences);
+
+            broadcastCommands = DynDicValueToStrDic(dic, "BroadcastCommands");
+            ExpandDictionaryPipes(broadcastCommands);
+
+            if (dic.TryGetValue("EmailCommands", out dynamic valueEC))
+            {
+                Dictionary<string, dynamic> dicEC = valueEC;
+
+                emailCommands = new Dictionary<string, EmailCommandArgs>();
+                foreach (var kvp in dicEC)
+                {
+                    Dictionary<string, dynamic> dicValue = kvp.Value;
+                    var emailCommandArgs = new EmailCommandArgs();
+                    DeserializeDictToObject<EmailCommandArgs>(dicValue, emailCommandArgs);
+                    emailCommands.Add(kvp.Key, emailCommandArgs);
+                }
             }
         }
     }

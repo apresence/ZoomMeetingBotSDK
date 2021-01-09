@@ -1,7 +1,8 @@
 ﻿namespace ZoomMeetingBotSDK.ChatBot.SimpleBot
 {
+    using System;
     using System.Collections.Generic;
-//    using ZoomMeetingBotSDK.Utils;
+    using static Utils;
 
     public class ChatBot : IChatBot
     {
@@ -68,32 +69,44 @@
             return chatBotInfo;
         }
 
-        public void Start(ChatBotInitParam param)
+        public void Init(ChatBotInitParam param)
         {
             if (hostApp != null)
             {
-                hostApp.Log(LogType.WRN, $"SimpleBot.Start(): Already started");
+                hostApp.Log(LogType.WRN, $"SimpleBot.Start(): Already initialized");
                 return;
             }
 
             hostApp = param.hostApp;
+            hostApp.SettingsChanged += new EventHandler(SettingsChanged);
 
-            SettingsUpdated();
+            LoadSettings();
         }
 
-        void IChatBot.Stop()
+        public void Start()
         {
-            // todo
+            // Nothing for this bot to do
         }
 
-        public void SettingsUpdated()
+        public void Stop()
+        {
+            // Nothing for this bot to do
+        }
+
+        public void SettingsChanged(object sender, EventArgs e)
+        {
+            LoadSettings();
+        }
+
+        private void LoadSettings()
         {
             lock (SettingsLock)
             {
-                smallTalk = hostApp.GetSetting("SmallTalkSequences");
-                randomTalk = hostApp.GetSetting("RandomTalk");
+                smallTalk = DynToStrDic(hostApp.GetSetting("SmallTalkSequences"));
+                ExpandDictionaryPipes(smallTalk);
+
+                randomTalk = DynToStrList(hostApp.GetSetting("RandomTalk"));
             }
         }
     }
 }
-    

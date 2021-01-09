@@ -26,6 +26,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ChatBots", "ChatBots", "{34
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Demo", "Demo", "{C6295193-9929-4EE2-9052-BA56F0D2265B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomMeetingBotSDK.Controller", "SDK\Controller\ZoomMeetingBotSDK.Controller\ZoomMeetingBotSDK.Controller.csproj", "{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -82,6 +84,14 @@ Global
 		{B1F7ED28-9FC5-4243-8B86-7804AC48705B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B1F7ED28-9FC5-4243-8B86-7804AC48705B}.Release|x86.ActiveCfg = Release|Any CPU
 		{B1F7ED28-9FC5-4243-8B86-7804AC48705B}.Release|x86.Build.0 = Release|Any CPU
+		{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}.Debug|x86.Build.0 = Debug|Any CPU
+		{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}.Release|x86.ActiveCfg = Release|Any CPU
+		{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -93,6 +103,7 @@ Global
 		{B8BF3636-96E4-45DF-B5AE-BF5AD730B862} = {329F8FF4-36D4-495F-9F12-C579C7E38E29}
 		{6E75E9FF-16F0-42B8-BBD8-EE25B9F52E0E} = {329F8FF4-36D4-495F-9F12-C579C7E38E29}
 		{B1F7ED28-9FC5-4243-8B86-7804AC48705B} = {3447DD6F-23FA-4CC4-912D-9007DADB6B33}
+		{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2} = {329F8FF4-36D4-495F-9F12-C579C7E38E29}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CBF27B07-D5AE-4D64-B47D-9319064B668A}

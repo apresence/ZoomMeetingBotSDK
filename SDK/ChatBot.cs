@@ -33,15 +33,15 @@
         ChatBotInfo GetChatBotInfo();
 
         /// <summary>
-        /// Initialize the bot and prepare it for conversation. Should be called only once, and before Converse() is called.
+        /// Initialize the bot. Should be called only once, and before Start() is called.
         /// </summary>
         /// <param name="param"></param>
-        void Start(ChatBotInitParam param);
+        void Init(ChatBotInitParam param);
 
         /// <summary>
-        /// Called when configuration settings have been updated. The bot should reload any settings it needs in order to pick up changes.
+        /// Prepare the bot for conversation. Should be called only once, and before Converse() is called.
         /// </summary>
-        void SettingsUpdated();
+        void Start();
 
         /// <summary>
         /// Called once the bot will no longer be used.

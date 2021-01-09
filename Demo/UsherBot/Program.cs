@@ -121,11 +121,18 @@ namespace ZoomMeetingBotSDK
 
     internal class Program
     {
+        private static HostApp hostApp;
+
+        private static bool waitDebuggerAttach = false;
+        private static bool debuggerAttached = false;
+
         private static int Main(string[] args)
         {
-            Global.hostApp = new UBHostApp();
+            hostApp = new HostApp();
+            hostApp.Init();
 
-            Global.LoadSettings();
+            waitDebuggerAttach = hostApp.GetSetting("WaitForDebuggerAttach", false);
+            WaitDebuggerAttach();
 
             if (Array.IndexOf(args, "/protect") != -1)
             {
@@ -225,11 +232,11 @@ namespace ZoomMeetingBotSDK
                 }
                 else if (arg_l.Equals("/prompt"))
                 {
-                    Global.cfg.PromptOnStartup = true;
+                    UsherBot.cfg.PromptOnStartup = true;
                 }
                 else if (arg_l.Equals("/waitattach"))
                 {
-                    Global.cfg.WaitForDebuggerAttach = true;
+                    waitDebuggerAttach = true;
                 }
                 else if (arg_l.Equals("/debug"))
                 {
@@ -245,7 +252,7 @@ namespace ZoomMeetingBotSDK
                 }
                 else if (arg_l.Equals("/waitmsg"))
                 {
-                    Global.cfg.WaitingRoomAnnouncementMessage = args[++i];
+                    UsherBot.cfg.WaitingRoomAnnouncementMessage = args[++i];
                 }
                 else
                 {
@@ -254,7 +261,7 @@ namespace ZoomMeetingBotSDK
                 }
             }
 
-            if (Global.cfg.DebugLoggingEnabled)
+            if (UsherBot.cfg.DebugLoggingEnabled)
             {
                 Console.WriteLine("Debugging enabled");
             }
@@ -264,24 +271,26 @@ namespace ZoomMeetingBotSDK
             // TBD: Exit when Zoom app exits
             Task.Factory.StartNew(() =>
                 {
+                    UsherBot usherBot = null;
+
                     try
                     {
-                        WindowTools.WakeScreen();
-
-                        Controller.CalcWindowLayout();
-                        WindowTools.SetWindowSize(Process.GetCurrentProcess().MainWindowHandle, Controller.AppRect);
-
-                        if (Global.cfg.WaitForDebuggerAttach)
+                        usherBot = new UsherBot();
+                        usherBot.Init(new ControlBot.ControlBotInitParam()
                         {
-                            Global.WaitDebuggerAttach();
-                        }
-                        if (Global.cfg.PromptOnStartup)
+                            hostApp = hostApp,
+                        });
+
+                        WaitDebuggerAttach();
+
+                        if (UsherBot.cfg.PromptOnStartup)
                         {
                             Console.WriteLine("Press ENTER to proceed");
                             Console.ReadLine();
                         }
 
-                        UsherBot.Run();
+                        hostApp.Start();
+                        usherBot.Start();
                     }
                     catch (Exception ex)
                     {
@@ -291,7 +300,6 @@ namespace ZoomMeetingBotSDK
                     Console.WriteLine("CONSOLE : === Listening for keystrokes ===");
 
                     bool paused = false;
-                    Global.BotAutomationFlag pausedBotFlags = Global.BotAutomationFlag.None;
 
                     while (true)
                     {
@@ -303,49 +311,32 @@ namespace ZoomMeetingBotSDK
                             var ch = keyInfo.KeyChar;
                             if (ch == 'a')
                             {
-                                Console.WriteLine("CONSOLE : === BEGIN AETree Enum ===");
-                                var handles = new List<(IntPtr h, string name)>
-                                {
-                                    (Controller.GetZoomMeetingWindowHandle(), "Main"),
-                                    (Controller.GetParticipantsPanelWindowHandle(), "Paticipants"),
-                                    (Controller.GetChatPanelWindowHandle(), "Chat"),
-                                };
-                                AutomationElement ae;
-                                foreach (var (h, name) in handles)
-                                {
-                                    try
-                                    {
-                                        ae = AutomationElement.FromHandle(h);
-                                        Global.hostApp.Log(LogType.INF, "(Console 'a') : {0}", UIATools.WalkRawElementsToString(ae));
-                                    }
-                                    catch
-                                    {
-                                        continue;
-                                    }
-                                }
-                                Console.WriteLine("CONSOLE : === END AETree Enum ===");
+                                Console.WriteLine("CONSOLE : LogAETree Requested");
+                                Controller.LogAETree();
                             }
                             else if (ch == 'p')
                             {
                                 if (paused)
                                 {
                                     Console.WriteLine("CONSOLE : === UNPAUSE ===");
-                                    Global.cfg.BotAutomationFlags = pausedBotFlags;
-                                    pausedBotFlags = Global.BotAutomationFlag.None;
+
                                     paused = false;
+                                    UsherBot.SetMode("pause", paused);
                                 }
                                 else
                                 {
                                     Console.WriteLine("CONSOLE : === PAUSE ===");
-                                    pausedBotFlags = Global.cfg.BotAutomationFlags;
-                                    Global.cfg.BotAutomationFlags = Global.BotAutomationFlag.None;
+
                                     paused = true;
+                                    UsherBot.SetMode("pause", paused);
                                 }
                             }
                             else if (ch == 'q')
                             {
                                 Console.WriteLine("CONSOLE : === QUIT ===");
-                                UsherBot.ShouldExit = true;
+
+                                usherBot.Stop();
+
                                 break;
                             }
                         }
@@ -360,6 +351,22 @@ namespace ZoomMeetingBotSDK
 
             Console.WriteLine("Exiting");
             return 0;
+        }
+
+        private static void WaitDebuggerAttach()
+        {
+            if ((!waitDebuggerAttach) || debuggerAttached)
+            {
+                return;
+            }
+
+            Console.WriteLine("Waiting for debugger to attach");
+            while (!Debugger.IsAttached)
+            {
+                Thread.Sleep(250);
+            }
+
+            Console.WriteLine("Debugger attached");
         }
     }
 }

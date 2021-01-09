@@ -22,13 +22,18 @@
         private bool bStarted = false;
 
         
-        /// <summary>
-        /// Starts up ChatBot and prepares it to converse.</summary>
-        /// </summary>
-        public void Start(ChatBotInitParam param)
+        public void Init(ChatBotInitParam param)
         {
-            hostApp = param.hostApp;
+            if (hostApp != null)
+            {
+                hostApp.Log(LogType.WRN, "chatBot already initialized");
+            }
 
+            hostApp = param.hostApp;
+        }
+
+        public void Start()
+        {
             if (bStarted)
             {
                 hostApp.Log(LogType.WRN, "chatBot already started");
@@ -139,7 +144,7 @@
             return chatBotInfo;
         }
 
-        public void SettingsUpdated()
+        public void SettingsUpdated(object sender, EventArgs e)
         {
             // We don't use any config settings, so there is nothing to do
         }
