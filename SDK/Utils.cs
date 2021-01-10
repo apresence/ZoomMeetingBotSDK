@@ -8,6 +8,7 @@
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Web.Script.Serialization;
+    using Newtonsoft.Json;
 
     /// <summary>
     /// Common utilities useful in implementing bots.
@@ -22,77 +23,13 @@
         /// </summary>
         private static JavaScriptSerializer serializer = new JavaScriptSerializer();
 
-        public static Dictionary<string, dynamic> JsonToDic(string json)
+        public static T DeserializeJson<T>(string json)
         {
-            lock (serializer)
-            {
-                return (Dictionary<string, dynamic>)serializer.DeserializeObject(json);
-            }
+            //System.Text.Json version
+            //return JsonSerializer.Deserialize<T>(json);
+
+            return JsonConvert.DeserializeObject<T>(json);
         }
-
-        /// <summary>
-        /// Populates properties of target object with key/value pairs defined in dic.
-        /// </summary>
-        public static void DeserializeDictToObject<T>(Dictionary<string, dynamic> dic, T target)
-        {
-            FieldInfo[] fields = target.GetType().GetFields();
-
-            foreach (var field in fields)
-            {
-                if (dic.TryGetValue(field.Name, out dynamic val))             
-                {
-                    field.SetValue(target, val);
-                }
-            }
-        }
-
-        /// <summary>
-        /// My own lightweight implementation for deserializing a JSON string into an arbitrary object. Similar to JSON.NET's JsonSerializer.Deserialize,
-        /// but uses only native .NET objects rather than depending on a bunch of NuGet libraries. NOTE: Only handles one level of nesting.
-        /// </summary>
-        public static void JsonDeserialize<T>(string json, T target)
-        {
-            DeserializeDictToObject<T>(JsonToDic(json), target);
-        }
-        public static List<string> DynToStrList(dynamic lst)
-        {
-            if (lst == null)
-            {
-                return null;
-            }
-
-            var ret = new List<string>();
-            foreach (var item in lst)
-            {
-                ret.Add(Convert.ToString(item));
-            }
-
-            return ret;
-        }
-
-        public static Dictionary<string, string> DynToStrDic(dynamic dic)
-        {
-            if (dic == null)
-            {
-                return null;
-            }
-
-            return ((Dictionary<string, dynamic>)dic).ToDictionary<KeyValuePair<string, dynamic>, string, string>(kvp => kvp.Key, kvp => Convert.ToString(kvp.Value));
-        }
-
-        public static Dictionary<string, string> DynDicValueToStrDic(dynamic dic, string key)
-        {
-            Dictionary<string, dynamic> dicDic = dic;
-
-            if (!dicDic.TryGetValue(key, out dynamic valueDyn))
-            {
-                return null;
-            }
-
-            return DynToStrDic(valueDyn);
-        }
-
-        //public static bool JsonLoad
 
         /// <summary>
         /// Reference implementation for returning a string representation of an object, similar to Python's native repr() function.
@@ -232,21 +169,5 @@
                 }
             }
         }
-
-        /*
-        private static readonly Random _GetRandomIndex_rand = new Random();
-        /// <summary>
-        /// Returns a random value from the given Dictionary object.
-        /// </summary>
-        public static TValue GetRandomDictionaryValue<TKey, TValue>(IDictionary<TKey, TValue> dic)
-        {
-            return dic.ElementAt(_GetRandomIndex_rand.Next(0, dic.Count - 1)).Value;
-        }
-
-        public static string GetRandomStringFromArray(string[] ary)
-        {
-            return ary.ElementAt(_GetRandomIndex_rand.Next(0, ary.Length - 1));
-        }
-        */
     }
 }

@@ -4,6 +4,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 16.0.30011.22
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UsherBot", "Demo\UsherBot\UsherBot.csproj", "{D57D6619-6BF5-4FA7-8609-06AF96BCD4D3}"
+	ProjectSection(ProjectDependencies) = postProject
+		{B8BF3636-96E4-45DF-B5AE-BF5AD730B862} = {B8BF3636-96E4-45DF-B5AE-BF5AD730B862}
+		{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2} = {9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}
+		{6E75E9FF-16F0-42B8-BBD8-EE25B9F52E0E} = {6E75E9FF-16F0-42B8-BBD8-EE25B9F52E0E}
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{54DC3283-4881-47A0-82A8-948A3582A156}"
 	ProjectSection(SolutionItems) = preProject

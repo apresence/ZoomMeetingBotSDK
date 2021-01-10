@@ -38,6 +38,11 @@
         void Log(LogType nLogType, string sMessage, params object[] values);
 
         /// <summary>
+        /// Retrieve JSON string of all settings.
+        /// </summary>
+        string GetSettingsAsJSON();
+
+        /// <summary>
         /// Retrieve a setting by key.
         /// </summary>
         dynamic GetSetting(string key, dynamic default_value = null);
@@ -54,6 +59,14 @@
         private static readonly object logLock = new object();
 
         public virtual event EventHandler SettingsChanged;
+
+        /// <summary>
+        /// Reference implementation for retrieving settings as JSON. Returns an empty string.
+        /// </summary>
+        public virtual string GetSettingsAsJSON()
+        {
+            return "";
+        }
 
         /// <summary>
         /// Reference implementation for retrieving settings.  Returns null for all keys.

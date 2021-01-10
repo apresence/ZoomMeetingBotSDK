@@ -121,9 +121,22 @@ namespace ZoomMeetingBotSDK
 
     internal class Program
     {
+        public class ProgramSettings
+        {
+            public ProgramSettings()
+            {
+                WaitForDebuggerAttach = false;
+                PromptOnStartup = false;
+            }
+
+            public bool WaitForDebuggerAttach { get; set; }
+
+            public bool PromptOnStartup { get; set; }
+        }
+
         private static HostApp hostApp;
 
-        private static bool waitDebuggerAttach = false;
+        private static ProgramSettings programSettings = null;
         private static bool debuggerAttached = false;
 
         private static int Main(string[] args)
@@ -131,7 +144,7 @@ namespace ZoomMeetingBotSDK
             hostApp = new HostApp();
             hostApp.Init();
 
-            waitDebuggerAttach = hostApp.GetSetting("WaitForDebuggerAttach", false);
+            programSettings = DeserializeJson<ProgramSettings>(hostApp.GetSettingsAsJSON());
             WaitDebuggerAttach();
 
             if (Array.IndexOf(args, "/protect") != -1)
@@ -232,11 +245,11 @@ namespace ZoomMeetingBotSDK
                 }
                 else if (arg_l.Equals("/prompt"))
                 {
-                    UsherBot.cfg.PromptOnStartup = true;
+                    programSettings.PromptOnStartup = true;
                 }
                 else if (arg_l.Equals("/waitattach"))
                 {
-                    waitDebuggerAttach = true;
+                    programSettings.WaitForDebuggerAttach = true;
                 }
                 else if (arg_l.Equals("/debug"))
                 {
@@ -260,11 +273,9 @@ namespace ZoomMeetingBotSDK
                     return 1;
                 }
             }
+            WaitDebuggerAttach();
 
-            if (UsherBot.cfg.DebugLoggingEnabled)
-            {
-                Console.WriteLine("Debugging enabled");
-            }
+            hostApp.Log(LogType.DBG, "Debug logging enabled");
 
             //Global.hostApp.Log(LogType.DBG, "Main thread_id=0x{0:X8}", Thread.CurrentThread.ManagedThreadId);
 
@@ -281,9 +292,7 @@ namespace ZoomMeetingBotSDK
                             hostApp = hostApp,
                         });
 
-                        WaitDebuggerAttach();
-
-                        if (UsherBot.cfg.PromptOnStartup)
+                        if (programSettings.PromptOnStartup)
                         {
                             Console.WriteLine("Press ENTER to proceed");
                             Console.ReadLine();
@@ -353,9 +362,9 @@ namespace ZoomMeetingBotSDK
             return 0;
         }
 
-        private static void WaitDebuggerAttach()
+        private static void WaitDebuggerAttach(bool force = false)
         {
-            if ((!waitDebuggerAttach) || debuggerAttached)
+            if (debuggerAttached || ((!force) && ((programSettings == null) || (!programSettings.WaitForDebuggerAttach))))
             {
                 return;
             }

@@ -10,6 +10,16 @@
 
     public class HostApp : CHostApp
     {
+        public class HostAppSettings
+        {
+            public HostAppSettings()
+            {
+                DebugLoggingEnabled = false;
+            }
+
+            public bool DebugLoggingEnabled { get; set; }
+        }
+
         private static readonly object SettingsLock = new object();
         private static readonly object LogLock = new object();
         private static readonly object IdleTimerLock = new object();
@@ -24,6 +34,10 @@
         private static volatile bool debugLoggingEnabled = false;
         private static volatile bool shouldExit = false;
         private static volatile int idleTimerTicks = 0;
+
+        private static string jsonSettings = null;
+
+        private static HostAppSettings hostAppSettings = null;
 
         public override event EventHandler SettingsChanged;
 
@@ -66,13 +80,8 @@
 
                 Log(LogType.INF, "(Re-)loading settings.json");
 
-                var json = File.ReadAllText(@"settings.json");
-                cfgDic = JsonToDic(json);
-
-                if (cfgDic.TryGetValue("DebugLoggingEnabled", out dynamic val))
-                {
-                    debugLoggingEnabled = val;
-                }
+                jsonSettings = File.ReadAllText(@"settings.json");
+                hostAppSettings = DeserializeJson<HostAppSettings>(jsonSettings);
             }
 
             SettingsChanged?.Invoke(this, null);
@@ -91,6 +100,15 @@
             throw new NotImplementedException();
         }
 
+        public override string GetSettingsAsJSON()
+        {
+            lock (SettingsLock)
+            {
+                return jsonSettings;
+            }
+        }
+
+        /*
         public override dynamic GetSetting(string key, dynamic default_value = null)
         {
             lock (SettingsLock)
@@ -102,7 +120,7 @@
                     return default_value;
                 }
 
-                /*
+                /-*
                 if (obj is object[])
                 {
                     var ret = new List<string>();
@@ -124,7 +142,7 @@
 
                     return ret;
                 }
-                */
+                *-/
 
                 return obj;
             }
@@ -137,6 +155,7 @@
                 return cfgDic.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);  //kvp => kvp.Value.Clone());
             }
         }
+        */
 
         public override void Log(string sMessage)
         {
@@ -182,7 +201,7 @@
                 .Append(sMessage)
                 .ToString();
 
-            if ((nLogType != LogType.DBG) || debugLoggingEnabled)
+            if ((nLogType != LogType.DBG) || hostAppSettings.DebugLoggingEnabled)
             {
                 lock (LogLock)
                 {

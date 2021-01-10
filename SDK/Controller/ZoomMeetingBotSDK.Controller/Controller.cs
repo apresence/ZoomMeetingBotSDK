@@ -20,60 +20,81 @@
     {
         public class ControllerConfigurationSettings
         {
+            public ControllerConfigurationSettings()
+            {
+                BrowserExecutable = @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe";
+                BrowserArguments = "https://zoom.us/signin";
+                MyParticipantName = "ZoomBot";            
+                MeetingID = null;
+                DisableClipboardPasteText = false;
+                ParticipantCountMismatchRetries = 3;
+                UIActionDelayMilliseconds = 250;
+                ClickDelayMilliseconds = UIActionDelayMilliseconds;
+                KeyboardInputDelayMilliseconds = UIActionDelayMilliseconds;
+                DisableParticipantPaging = false;
+                MouseMovementRate = 100;
+                UpdateMeetingOptionsDelaySecs = -1;
+                Screen = null;
+                ZoomExecutable = @"%AppData%\Zoom\bin\Zoom.exe";
+                ZoomUsername = null;
+                ZoomPassword = null;
+                EnableWalkRawElementsToString = false;
+            }
+
             /// <summary>
             /// Absolute path to web browser executable.
             /// </summary>
-            public string BrowserExecutable = @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe";
+            public string BrowserExecutable { get; set; }
 
             /// <summary>
             /// Optional command line arguments to pass to web browser.
             /// </summary>
-            public string BrowserArguments = "https://zoom.us/signin";
+            public string BrowserArguments { get; set; }
 
             /// <summary>
             /// Name to use when joining the Zoom meeting.  If the default name does not match, a rename is done after joining the meeting.
             /// </summary>
-            public string MyParticipantName = "ZoomBot";
+            public string MyParticipantName { get; set; }
 
             /// <summary>
             /// ID of the meeting to join.
             /// </summary>
-            public string MeetingID = null;
+            public string MeetingID { get; set; }
 
             /// <summary>
             /// Disables using clipboard to paste text into target apps; Falls back on sending individual keystrokes instead.
             /// </summary>
-            public bool DisableClipboardPasteText = false;
+            public bool DisableClipboardPasteText { get; set; }
 
             /// <summary>
             /// Number of times to retry parsing participant list until count matches what is in the window title.
             /// </summary>
-            public int ParticipantCountMismatchRetries = 3;
+            public int ParticipantCountMismatchRetries { get; set; }
 
             /// <summary>
             /// Number of ms to delay after performing an action which requires an update to the Zoom UI.
             /// </summary>
-            public int UIActionDelayMilliseconds = 250;
+            public int UIActionDelayMilliseconds { get; set; }
 
             /// <summary>
             /// Number of ms to delay after moving mouse to target location before sending click event.
             /// </summary>
-            public int ClickDelayMilliseconds = 0;
+            public int ClickDelayMilliseconds { get; set; }
 
             /// <summary>
             /// Number of ms to delay after sending keyboard input to the remote app.
             /// </summary>
-            public int KeyboardInputDelayMilliseconds = 0;
+            public int KeyboardInputDelayMilliseconds { get; set; }
 
             /// <summary>
             /// Disable paging up/down in the Participants window. If screen resolution is sufficiently big (height), it may not be needed.
             /// </summary>
-            public bool DisableParticipantPaging = false;
+            public bool DisableParticipantPaging { get; set; }
 
             /// <summary>
             /// Duration of time over which to do mouse moves when simulating input. This helps the target app "see" the mouse movement more reliably. <= 0 will move the mouse instantly.
             /// </summary>
-            public int MouseMovementRate = 100;
+            public int MouseMovementRate { get; set; }
 
             /// <summary>
             /// Seconds to wait between opening the meeting options menu to get status from the UI.
@@ -82,39 +103,33 @@
             ///    0  Poll as fast as possible
             ///   >0  Delay between polls
             /// </summary>
-            public int UpdateMeetingOptionsDelaySecs = -1;
+            public int UpdateMeetingOptionsDelaySecs { get; set; }
 
             /// <summary>
             /// Configures which display should be used to run Zoom, ZoomMeetingBotSDK, UsherBot, etc.  The default is whichever display is set as the "main" screen
             /// </summary>
-            public string Screen = null;
+            public string Screen { get; set; }
 
             /// <summary>
             /// Full path to Zoom executable
             /// </summary>
-            public string ZoomExecutable = @"%AppData%\Zoom\bin\Zoom.exe";
+            public string ZoomExecutable { get; set; }
 
             /// <summary>
             /// User name for Zoom account
             /// </summary>
-            public string ZoomUsername = null;
+            public string ZoomUsername { get; set; }
 
             /// <summary>
             /// Password for Zoom account (encrypted - can only be decrypted by the current user on the current machine)
             /// </summary>
-            public string ZoomPassword = null;
+            public string ZoomPassword { get; set; }
 
             /// <summary>
             /// Enables the function WalkRawElementsToString() which walks the entire AutomationElement tree and returns a string.  The default is True.  This is an
             /// extremely expensive operation, often taking a minute or more, so disabling it on live meetings may be a good idea.
             /// </summary>
-            public bool EnableWalkRawElementsToString = false;
-
-            public ControllerConfigurationSettings()
-            {
-                ClickDelayMilliseconds = UIActionDelayMilliseconds;
-                KeyboardInputDelayMilliseconds = UIActionDelayMilliseconds;
-            }
+            public bool EnableWalkRawElementsToString { get; set; }
         }
         public static ControllerConfigurationSettings cfg = new ControllerConfigurationSettings();
 
@@ -3645,7 +3660,7 @@
 
         private void LoadSettings()
         {
-            DeserializeDictToObject<ControllerConfigurationSettings>(hostApp.GetSettingsDic(), cfg);
+            cfg = DeserializeJson<ControllerConfigurationSettings>(hostApp.GetSettingsAsJSON());
         }
     }
 }

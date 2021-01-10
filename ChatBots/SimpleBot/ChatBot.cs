@@ -6,6 +6,25 @@
 
     public class ChatBot : IChatBot
     {
+        internal class SimpleBotConfigurationSettings
+        {
+            internal SimpleBotConfigurationSettings()
+            {
+                SmallTalkSequences = new Dictionary<string, string>();
+                RandomTalk = null;
+            }
+
+            /// <summary>
+            /// A list of pre-defined small talk responses based on received private chat messages.  Use pipes to allow more than one query to produce the same response.  TBD: Move into RemedialBot
+            /// </summary>
+            public Dictionary<string, string> SmallTalkSequences { get; set; }
+
+            /// <summary>
+            /// Random bot responses.  TBD: Move into RemedialBot
+            /// </summary>
+            public string[] RandomTalk { get; set; }
+        }
+
         private static IHostApp hostApp = null;
         private static readonly object SettingsLock = new object();
 
@@ -15,13 +34,15 @@
              Name = "SimpleBot",
         };
 
-        private static Dictionary<string, string> smallTalk = new Dictionary<string, string>();
-        private static List<string> randomTalk = new List<string>();
+        //private static Dictionary<string, string> smallTalk = new Dictionary<string, string>();
+        //private static List<string> randomTalk = new List<string>();
+        private static SimpleBotConfigurationSettings simpleBotConfigurationSettings = null;
 
         private static string SmallTalk(string text)
         {
             string response = null;
 
+            var smallTalk = simpleBotConfigurationSettings.SmallTalkSequences;
             if (smallTalk != null)
             {
                 foreach (var word in text.GetWordsInSentence())
@@ -40,6 +61,7 @@
         {
             string response = null;
 
+            var randomTalk = simpleBotConfigurationSettings.RandomTalk;
             if (randomTalk != null)
             {
                 response = randomTalk.RandomElement();
@@ -99,13 +121,11 @@
         }
 
         private void LoadSettings()
-        {
+        {         
             lock (SettingsLock)
             {
-                smallTalk = DynToStrDic(hostApp.GetSetting("SmallTalkSequences"));
-                ExpandDictionaryPipes(smallTalk);
-
-                randomTalk = DynToStrList(hostApp.GetSetting("RandomTalk"));
+                simpleBotConfigurationSettings = DeserializeJson<SimpleBotConfigurationSettings>(hostApp.GetSettingsAsJSON());
+                ExpandDictionaryPipes(simpleBotConfigurationSettings.SmallTalkSequences);
             }
         }
     }

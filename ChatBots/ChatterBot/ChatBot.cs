@@ -2,6 +2,8 @@
 {
     using System;
     using System.Diagnostics;
+    using System.IO;
+    using System.Reflection;
     using ZoomMeetingBotSDK;
     using static Utils;
 
@@ -44,10 +46,13 @@
 
             try
             {
+                var workingDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+
                 p = new Process()
                 {
                     StartInfo = new ProcessStartInfo
                     {
+                        WorkingDirectory = workingDirectory,
                         UseShellExecute = false,
                         RedirectStandardInput = true,
                         RedirectStandardOutput = true,

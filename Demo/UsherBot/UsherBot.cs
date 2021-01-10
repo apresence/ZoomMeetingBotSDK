@@ -77,25 +77,93 @@
 
         public class BotConfigurationSettings
         {
-            public bool DebugLoggingEnabled = false;
-            public bool IsPaused = false;
-            public bool PromptOnStartup = false;
-            public int UnknownParticipantThrottleSecs = 15;
-            public int UnknownParticipantWaitSecs = 30;
-            public string MyParticipantName = "ZoomBot";
-            public BotAutomationFlag BotAutomationFlags = BotAutomationFlag.All;
-            public string MeetingID = null;
-            public int BroadcastCommandGuardTimeSecs = 300;
-            public string WaitingRoomAnnouncementMessage = null;
-            public int WaitingRoomAnnouncementDelaySecs = 60;
-            //public string Screen = null;
+            public void ConfigurationSettings()
+            {
+                DebugLoggingEnabled = false;
+                IsPaused = false;
+                UnknownParticipantThrottleSecs = 15;
+                UnknownParticipantWaitSecs = 30;
+                MyParticipantName = "UsherBot";
+                BotAutomationFlags = BotAutomationFlag.All;
+                MeetingID = null;
+                BroadcastCommands = new Dictionary<string, string>();
+                BroadcastCommandGuardTimeSecs = 300;
+                EmailCommands = new Dictionary<string, EmailCommandArgs>();
+                OneTimeHiSequences = new Dictionary<string, string>();
+                WaitingRoomAnnouncementMessage = null;
+                WaitingRoomAnnouncementDelaySecs = 60;
+            }
+
+            /// <summary>
+            /// If true, enables additional debug logging. If false, suppresses that logging.
+            /// </summary>
+            public bool DebugLoggingEnabled { get; set; }
+
+            /// <summary>
+            /// If true, the BOT will stop all automated operations.  Primarily useful for debugging purposes.
+            /// </summary>
+            public bool IsPaused { get; set; }
+
+            /// <summary>
+            /// Number of seconds to wait before admitting an unknown participant to the meeting.
+            /// </summary>
+            public int UnknownParticipantWaitSecs { get; set; }
+
+            /// <summary>
+            /// Number of seconds to pause between adding unknown participants.  This helps to mitigate against Zoom Bombers which tend to flood the meeting all at once.
+            /// </summary>
+            public int UnknownParticipantThrottleSecs { get; set; }
+
+            /// <summary>
+            /// Name to use when joining the Zoom meeting.  If the default name does not match, a rename is done after joining the meeting.
+            /// </summary>
+            public string MyParticipantName { get; set; }
+
+            /// <summary>
+            /// A set of flags that controls which Bot automation is enabled and disabled.  See BotAutomationFlag enum for further details.
+            /// </summary>
+            public BotAutomationFlag BotAutomationFlags { get; set; }
+
+            /// <summary>
+            /// ID of the meeting to join.
+            /// </summary>
+            public string MeetingID { get; set; }
+
+            /// <summary>
+            /// A list of commands which when invoked will send a predefined message to Everyone in the chat.
+            /// </summary>
+            public Dictionary<string, string> BroadcastCommands { get; set; }
+
+            /// <summary>
+            /// Number of seconds to delay before allowing the same broadcast message to be sent again.
+            ///   <0 : Infinite delay (Only send broadcast message once)
+            ///    0 : No delay
+            ///   >0 : Delay in seconds
+            /// </summary>
+            public int BroadcastCommandGuardTimeSecs { get; set; }
+
+            /// <summary>
+            /// A list of commands that will send an email.  The format is /command to-address whatever-you-want-that-is-put-in-{0}-in-the-message
+            /// </summary>
+            public Dictionary<string, EmailCommandArgs> EmailCommands { get; set; }
+
+            /// <summary>
+            /// A list of pre-defined one-time greetings based on received private chat messages.  Use pipes to allow more than one query to produce the same response.  TBD: Move into RemedialBot
+            /// </summary>
+            public Dictionary<string, string> OneTimeHiSequences { get; set; }
+
+            /// <summary>
+            /// If set, this message is sent to participants in the waiting room every WaitingRoomAnnouncementDelaySecs seconds.
+            /// </summary>
+            public string WaitingRoomAnnouncementMessage { get; set; }
+
+            /// <summary>
+            /// Controls the sending frequency for WaitingRoomAnnouncementMessage.
+            /// </summary>
+            public int WaitingRoomAnnouncementDelaySecs { get; set; }
         }
 
         public static BotConfigurationSettings cfg = new BotConfigurationSettings();
-
-        private static Dictionary<string, string> oneTimeHiSequences = null;
-        private static Dictionary<string, string> broadcastCommands = null;
-        private static Dictionary<string, EmailCommandArgs> emailCommands = null;
 
         public static bool SetMode(string sName, bool bNewState)
         {
@@ -731,7 +799,7 @@
         {
             string response = null;
 
-            if (oneTimeHiSequences == null)
+            if (cfg.OneTimeHiSequences == null)
             {
                 return response;
             }
@@ -745,7 +813,7 @@
             // Try to give a specific response
             foreach (var word in text.GetWordsInSentence())
             {
-                if (oneTimeHiSequences.TryGetValue(word.ToLower(), out response))
+                if (cfg.OneTimeHiSequences.TryGetValue(word.ToLower(), out response))
                 {
                     break;
                 }
@@ -905,9 +973,9 @@
                 var response = OneTimeHi(sMsg, sFrom);
 
                 // Handle canned responses based on broadcast keywords.  TBD: Move this into a bot
-                if (broadcastCommands != null)
+                if (cfg.BroadcastCommands != null)
                 {
-                    foreach (var broadcastCommand in broadcastCommands)
+                    foreach (var broadcastCommand in cfg.BroadcastCommands)
                     {
                         if (FastRegex.IsMatch($"\\b${broadcastCommand.Key}\\b", sMsg, RegexOptions.IgnoreCase))
                         {
@@ -1002,7 +1070,7 @@
             // All of the following commands require an argument
             string sTarget = (a.Length == 1) ? null : (a[1].Length == 0 ? null : a[1]);
 
-            if ((broadcastCommands != null) && broadcastCommands.TryGetValue(sCommand, out string sBroadcastMsg))
+            if (cfg.BroadcastCommands.TryGetValue(sCommand, out string sBroadcastMsg))
             {
                 DateTime dtNow = DateTime.UtcNow;
 
@@ -1094,9 +1162,9 @@
                 return;
             }
 
-            if (emailCommands != null)
+            if (cfg.EmailCommands != null)
             {
-                if (emailCommands.TryGetValue(sCommand, out EmailCommandArgs emailCommandArgs))
+                if (cfg.EmailCommands.TryGetValue(sCommand, out EmailCommandArgs emailCommandArgs))
                 {
                     string[] args = sTarget.Trim().Split(SpaceDelim, 2);
 
@@ -1348,7 +1416,7 @@
         private static List<IChatBot> chatBots = null;
 
         /// <summary>
-        /// Searches for ChatBot plugins under plugins\ChatBot\{BotName}\ZoomMeetingBotSDK.ChatBot.{BotName}.dll and tries to instantiate them,
+        /// Searches for ChatBot plugins under plugins\ChatBots\{BotName}\ZoomMeetingBotSDK.ChatBot.{BotName}.dll and tries to instantiate them,
         /// returning a list of ones that succeeded.  The list is ordered by intelligence level, with the most intelligent bot listed
         /// first.
         ///
@@ -1538,28 +1606,9 @@
 
         private void LoadSettings()
         {
-            var dic = hostApp.GetSettingsDic();
-            DeserializeDictToObject<BotConfigurationSettings>(dic, cfg);
-
-            oneTimeHiSequences = DynDicValueToStrDic(dic, "OneTimeHiSequences");
-            ExpandDictionaryPipes(oneTimeHiSequences);
-
-            broadcastCommands = DynDicValueToStrDic(dic, "BroadcastCommands");
-            ExpandDictionaryPipes(broadcastCommands);
-
-            if (dic.TryGetValue("EmailCommands", out dynamic valueEC))
-            {
-                Dictionary<string, dynamic> dicEC = valueEC;
-
-                emailCommands = new Dictionary<string, EmailCommandArgs>();
-                foreach (var kvp in dicEC)
-                {
-                    Dictionary<string, dynamic> dicValue = kvp.Value;
-                    var emailCommandArgs = new EmailCommandArgs();
-                    DeserializeDictToObject<EmailCommandArgs>(dicValue, emailCommandArgs);
-                    emailCommands.Add(kvp.Key, emailCommandArgs);
-                }
-            }
+            cfg = DeserializeJson<BotConfigurationSettings>(hostApp.GetSettingsAsJSON());
+            ExpandDictionaryPipes(cfg.BroadcastCommands);
+            ExpandDictionaryPipes(cfg.OneTimeHiSequences);
         }
     }
 }
