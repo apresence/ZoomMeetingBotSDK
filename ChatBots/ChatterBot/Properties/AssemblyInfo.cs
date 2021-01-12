@@ -6,11 +6,11 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("ZoomMeetingBotSDK.ChatBots.ChatterBot")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("Sample In-Meeting Control Bot for Zoom Meetings based on ChatterBot python library")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("ZoomMeetingBotSDK.ChatBots.ChatterBot")]
-[assembly: AssemblyCopyright("Copyright ©  2020")]
+[assembly: AssemblyCompany("zerodayvenerabilities.com")]
+[assembly: AssemblyProduct("ZoomMeetingBotSDK")]
+[assembly: AssemblyCopyright("Copyright © Zero Day Venerabilities. All rights reserved.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

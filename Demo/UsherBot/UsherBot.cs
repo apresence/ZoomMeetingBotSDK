@@ -1,15 +1,22 @@
-﻿namespace ZoomMeetingBotSDK
+﻿// TBD:
+//   - Move all try/catch logic to controller
+
+namespace ZoomMeetingBotSDK
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.IO;
     using System.Linq;
     using System.Reflection;
+    using System.Runtime.CompilerServices;
     using System.Text.RegularExpressions;
     using System.Threading;
-    using static Utils;
-    using ChatBot;
-    using ControlBot;
+
+    using ZoomMeetingBotSDK.ChatBot;
+    using ZoomMeetingBotSDK.ControlBot;
+
+    using static ZoomMeetingBotSDK.Utils;
 
     public class UsherBot : IControlBot
     {
@@ -18,17 +25,14 @@
 #pragma warning restore SA1401 // Fields should be private
 
         private static IHostApp hostApp;
-        private static Controller controller;
 
         private static readonly Dictionary<string, bool> GoodUsers = new Dictionary<string, bool>();
         private static readonly object _lock_eh = new object();
 
         private static DateTime dtLastWaitingRoomAnnouncement = DateTime.MinValue;
 
-        private static DateTime dtNextAdmission = DateTime.MinValue;
+        private static DateTime dtLastAdmission = DateTime.MinValue;
         private static DateTime dtLastGoodUserMod = DateTime.MinValue;
-
-        private static System.Threading.Timer tmrIdle = null;
 
         /// <summary>
         /// Used to record the last time a broadcast message was sent in order to prevent a specific broadcast message from being requested & sent in rapid succession.
@@ -43,18 +47,19 @@
         [Flags]
         public enum BotAutomationFlag
         {
-            None = 0b0000000000,
-            RenameMyself = 0b0000000001,
-            ReclaimHost = 0b0000000010,
-            ProcessParticipants = 0b0000000100,
-            ProcessChat = 0b0000001000,
-            CoHostKnown = 0b0000010000,
-            AdmitKnown = 0b0000100000,
-            AdmitOthers = 0b0001000000,
-            Converse = 0b0010000000,
-            Speak = 0b0100000000,
-            UnmuteMyself = 0b1000000000,
-            All = 0b1111111111,
+            None                 = 0b00000000000,
+            SendTopicOnJoin      = 0b00000000001,
+            RenameMyself         = 0b00000000010,
+            ReclaimHost          = 0b00000000100,
+            ProcessParticipants  = 0b00000001000,
+            ProcessChat          = 0b00000010000,
+            CoHostKnown          = 0b00000100000,
+            AdmitKnown           = 0b00001000000,
+            AdmitOthers          = 0b00010000000,
+            Converse             = 0b00100000000,
+            Speak                = 0b01000000000,
+            UnmuteMyself         = 0b10000000000,
+            All                  = 0b11111111111,
         }
 
         public class EmailCommandArgs
@@ -77,7 +82,7 @@
 
         public class BotConfigurationSettings
         {
-            public void ConfigurationSettings()
+            public BotConfigurationSettings()
             {
                 DebugLoggingEnabled = false;
                 IsPaused = false;
@@ -210,6 +215,7 @@
                 hostApp.Log(LogType.INF, "Lockdown mode {0}", bNewState ? "on" : "off");
                 return true;
             }
+
             if (sName == "debug")
             {
                 if (cfg.DebugLoggingEnabled == bNewState)
@@ -221,6 +227,7 @@
                 hostApp.Log(LogType.INF, "Debug mode {0}", cfg.DebugLoggingEnabled ? "on" : "off");
                 return true;
             }
+
             if (sName == "pause")
             {
                 if (cfg.IsPaused == bNewState)
@@ -232,6 +239,7 @@
                 hostApp.Log(LogType.INF, "Pause mode {0}", cfg.IsPaused ? "on" : "off");
                 return true;
             }
+
             if (sName == "passive")
             {
                 var bPassive = cfg.BotAutomationFlags == BotAutomationFlag.None;
@@ -244,6 +252,7 @@
                 hostApp.Log(LogType.INF, "Passive mode {0}", bPassive ? "on" : "off");
                 return true;
             }
+
             throw new Exception(string.Format("Unknown mode: {0}", sName));
         }
 
@@ -267,7 +276,7 @@
             return GetTodayTonight().UppercaseFirst() + "'s topic: " + Topic;
         }
 
-        public static bool SendTopic(string recipient, bool useDefault = true)
+        public static bool SendTopic(Controller.Participant recipient, bool useDefault = true)
         {
             var topic = GetTopic(useDefault);
 
@@ -279,16 +288,14 @@
             var response = OneTimeHi("morning", recipient);
             if (response != null)
             {
-                response = FormatChatResponse(response, recipient) + " " + topic;
+                response = FormatChatResponse(response, recipient.name) + " " + topic;
             }
             else
             {
                 response = topic;
             }
 
-            Controller.SendChatMessage(recipient, response);
-
-            return true;
+            return Controller.SendChatMessage(recipient, response);
         }
 
         private static string CleanUserName(string s)
@@ -304,22 +311,10 @@
             return Regex.Replace(Regex.Replace(s.ToLower().Replace(".", string.Empty), @"\s+", " "), @"\s*\((?:Usher|DL|Chair|Speaker)\)\s*$", string.Empty, RegexOptions.IgnoreCase).Trim();
         }
 
-        //static private string sLastChatData = "";
-        private static void DoChatActions()
-        {
-            if ((cfg.BotAutomationFlags & BotAutomationFlag.ProcessChat) == 0)
-            {
-                return;
-            }
-
-            //ZoomMeetingBotSDK.SendQueuedChatMessages();
-            _ = Controller.UpdateChat();
-            Controller.SendQueuedChatMessages();
-        }
-
         private static readonly HashSet<string> HsParticipantMessages = new HashSet<string>();
 
         private static string FirstParticipantGreeted = null;
+
         private static void DoParticipantActions()
         {
             if ((cfg.BotAutomationFlags & BotAutomationFlag.ProcessParticipants) == 0)
@@ -327,138 +322,131 @@
                 return;
             }
 
-            _ = Controller.UpdateParticipants();
+            // TBD: Could UpdateParticipants() here, but we should be good with updates provided by fired SDK events
 
             if (Controller.me != null)
             {
                 // If I've got my own participant object, do any self-automation needed
 
-                if (((cfg.BotAutomationFlags & BotAutomationFlag.ReclaimHost) != 0) && (Controller.me.role != Controller.ParticipantRole.Host))
+                if (((cfg.BotAutomationFlags & BotAutomationFlag.ReclaimHost) != 0) && (!Controller.me.isHost))
                 {
                     // TBD: Throttle ReclaimHost attempts?
-                    if (Controller.me.role == Controller.ParticipantRole.CoHost)
+                    if (Controller.me.isCoHost)
                     {
                         hostApp.Log(LogType.WRN, "BOT I'm Co-Host instead of Host; Trying to reclaim host");
                     }
-                    else if (Controller.me.role == Controller.ParticipantRole.None)
+                    else
                     {
                         hostApp.Log(LogType.WRN, "BOT I'm not Host or Co-Host; Trying to reclaim host");
                     }
-                    Controller.ReclaimHost();
+
+                    if (Controller.ReclaimHost())
+                    {
+                        hostApp.Log(LogType.INF, "BOT Reclaim host successful");
+                    }
+                    else
+                    {
+                        hostApp.Log(LogType.WRN, "BOT Failed to reclaim host");
+                    }
                 }
 
                 if (((cfg.BotAutomationFlags & BotAutomationFlag.RenameMyself) != 0) && (Controller.me.name != cfg.MyParticipantName))
                 {
                     // Rename myself.  Event handler will type in the name when the dialog pops up
-                    hostApp.Log(LogType.INF, "BOT Renaming myself from {0} to {1}", repr(Controller.me.name), repr(cfg.MyParticipantName));
-                    Controller.RenameParticipant(Controller.me, cfg.MyParticipantName);
+                    hostApp.Log(LogType.INF, $"BOT Renaming myself from {repr(Controller.me.name)} to {repr(cfg.MyParticipantName)}");
+                    _ = Controller.RenameParticipant(Controller.me, cfg.MyParticipantName);
                 }
 
-                if (((cfg.BotAutomationFlags & BotAutomationFlag.UnmuteMyself) != 0) && (Controller.me.audioStatus == Controller.ParticipantAudioStatus.Muted))
+                if (((cfg.BotAutomationFlags & BotAutomationFlag.UnmuteMyself) != 0) && Controller.me.isAudioMuted)
                 {
                     // Unmute myself
                     hostApp.Log(LogType.INF, "BOT Unmuting myself");
-                    Controller.UnmuteParticipant(Controller.me);
+                    _ = Controller.UnmuteParticipant(Controller.me);
                 }
 
-                Controller.UpdateMeetingOptions();
             }
 
-            bool bWaiting = false;
+            // TBD: Could update meeting options here to see if everyone is muted, etc...
+
+            int numWaiting = 0;
+            int numAttending = 0;
+
+            bool bAdmitOthers = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitOthers) != 0;
             DateTime dtNow = DateTime.UtcNow;
-            foreach (Controller.Participant p in Controller.participants.Values)
+
+            // Get a safe copy of participant list
+            List<Controller.Participant> participants = null;
+            lock (Controller.participants)
             {
-                // Skip over my own participant record; We handled that earlier
+                participants = Controller.participants.Values.ToList<Controller.Participant>();
+            }
+
+            foreach (Controller.Participant p in participants)
+            {
+                // Skip over my own participant record; We handled that earlier.  Also, skip over anyone not in the waiting room
                 if (p.isMe)
                 {
                     continue;
                 }
 
-                string sCleanName = CleanUserName(p.name);
-                bool bAdmit = false;
-                bool bAdmitKnown = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitKnown) != 0;
-                bool bAdmitOthers = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitOthers) != 0;
-
-                if (p.status == Controller.ParticipantStatus.Waiting)
+                switch (p.status)
                 {
-                    bWaiting = true;
-
-                    if (!(bAdmitKnown || bAdmitOthers))
-                    {
-                        continue; // Nothing to do
-                    }
-
-                    if (GoodUsers.ContainsKey(sCleanName))
-                    {
-                        if (bAdmitKnown)
-                        {
-                            hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", repr(p.name));
-                            if (Controller.AdmitParticipant(p))
-                            {
-                                //SendTopic(p.name, false);
-                            }
-                        }
-
+                    case Controller.ParticipantStatus.Waiting:
+                        numWaiting += 1;
+                        break;
+                    case Controller.ParticipantStatus.Attending:
+                        numAttending += 1;
                         continue;
-                    }
+                    default:
+                        continue;
+                }
 
-                    // Unknown user
+                // TBD: Do as sorted admit queue?
+                if (bAdmitOthers)
+                {
+                    // Admitting an unknown user
+
+                    bool bAdmit = false;
+
                     DateTime dtWhenToAdmit = p.dtWaiting.AddSeconds(cfg.UnknownParticipantWaitSecs);
-                    dtWhenToAdmit = dtWhenToAdmit > dtNextAdmission ? dtWhenToAdmit : dtNextAdmission;
-                    bAdmit = dtWhenToAdmit >= dtNow;
-
-                    if (!bAdmitOthers)
+                    if (dtWhenToAdmit < dtNow)
                     {
+                        // Too early to admit this participant
                         continue;
                     }
 
-                    string sMsg = string.Format("BOT Admit {0} : Unknown participant waiting room time reached", p.name);
+                    dtWhenToAdmit = dtLastAdmission.AddSeconds(cfg.UnknownParticipantWaitSecs);
+                    bAdmit = dtNow >= dtWhenToAdmit;
+
+                    string waitMsg = $"BOT Admit {p} : Unknown participant waiting room time reached";
                     if (bAdmit)
                     {
-                        sMsg += " : Admitting";
+                        waitMsg += " : Admitting";
                     }
 
                     // Make sure we don't display the message more than once
-                    if (!HsParticipantMessages.Contains(sMsg))
+                    if (!HsParticipantMessages.Contains(waitMsg))
                     {
-                        hostApp.Log(LogType.INF, sMsg);
-                        HsParticipantMessages.Add(sMsg);
+                        hostApp.Log(LogType.INF, waitMsg);
+                        HsParticipantMessages.Add(waitMsg);
                     }
 
                     if (bAdmit && Controller.AdmitParticipant(p))
                     {
-                        HsParticipantMessages.Remove(sMsg); // After we admit the user, remove the message
-                        dtNextAdmission = dtNow.AddSeconds(cfg.UnknownParticipantThrottleSecs);
+                        // User was successfully admitted; Remove the message from the queue
+                        HsParticipantMessages.Remove(waitMsg);
 
-                        /*
-                        // Participant was successfully admitted.  We want to send them the topic if one is set, but we can't do that
-                        //   while they are in the waiting room (DMs cannot be sent to waiting room participants, only broadcast messages),
-                        //   so queue up the message for later after they are admitted.
-                        SendTopic(p.name, false);
-                        */
+                        // Caculate next admission time
+                        dtLastAdmission = dtNow;
+
+                        // Adjust counts
+                        numWaiting -= 1;
+                        numAttending += 1;
                     }
-
-                    continue;
-                }
-
-                if (p.status == Controller.ParticipantStatus.Attending)
-                {
-                    if (((cfg.BotAutomationFlags & BotAutomationFlag.CoHostKnown) != 0) && (p.role == Controller.ParticipantRole.None) && (Controller.me.role == Controller.ParticipantRole.Host))
-                    {
-                        // If I'm host, and this user is not co-host, check if they should be
-                        if (GoodUsers.TryGetValue(sCleanName, out bool bCoHost) && bCoHost)
-                        {
-                            // Yep, they should be, so do the promotion
-                            hostApp.Log(LogType.INF, "BOT Promoting {0} to Co-host", repr(p.name));
-                            Controller.PromoteParticipant(p);
-                        }
-                    }
-
-                    continue;
                 }
             }
 
-            if (bWaiting)
+            if ((numAttending == 0) && (numWaiting > 0))
             {
                 string waitMsg = cfg.WaitingRoomAnnouncementMessage;
 
@@ -477,95 +465,51 @@
                     return;
                 }
 
-                // At least one person is in the waiting room.  If we're configured to make annoucements to
-                //   them, then do so now
-
+                // At least one person is in the waiting room.  If we're configured to make annoucements to them, do so now
                 dtNow = DateTime.UtcNow;
                 if (dtNow >= dtLastWaitingRoomAnnouncement.AddSeconds(cfg.WaitingRoomAnnouncementDelaySecs))
                 {
-                    Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInWaitingRoom, waitMsg);
-                    dtLastWaitingRoomAnnouncement = dtNow;
+                    // TBD: Sending to everyone in the waiting room is not yet available via the SDK -- Try sending to everyone since there's nobody in the meeting
+                    // Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInWaitingRoom, waitMsg);
+                    if (Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, waitMsg))
+                    {
+                        dtLastWaitingRoomAnnouncement = dtNow;
+                    }
                 }
             }
 
             // Greet the first person to join the meeting, but only if we started Zoom
-            if ((!Controller.ZoomAlreadyRunning) && (FirstParticipantGreeted == null))
+            //if ((!Controller.ZoomAlreadyRunning) && (FirstParticipantGreeted == null))
+            // TBD: Figure out how to replicate the zoom meeting already running logic
+            if (FirstParticipantGreeted == null)
             {
-                var plist = Controller.participants.ToList();
+                //var plist = Controller.participants.ToList();
 
                 // Looking for a participant that is not me, using computer audio, audio is connected, and is a known good user
-                var idx = plist.FindIndex(x => (
-                    (!x.Value.isMe) &&
-                    (x.Value.device == Controller.ParticipantAudioDevice.Computer) &&
-                    (x.Value.audioStatus != Controller.ParticipantAudioStatus.Disconnected) &&
-                    GoodUsers.ContainsKey(CleanUserName(x.Value.name))
+                var idx = participants.FindIndex(x => (
+                    (!x.isMe) &&
+                    (!x.isAudioMuted) &&
+                    (x.audioDevice == Controller.ControllerAudioType.AUDIOTYPE_VOIP) &&
+                    GoodUsers.ContainsKey(CleanUserName(x.name))
                 ));
                 if (idx != -1)
                 {
-                    FirstParticipantGreeted = plist[idx].Value.name;
-                    var msg = FormatChatResponse(OneTimeHi("morning", FirstParticipantGreeted), FirstParticipantGreeted);
+                    FirstParticipantGreeted = participants[idx].name;
+                    var msg = FormatChatResponse(OneTimeHi("morning", participants[idx]), FirstParticipantGreeted);
 
                     Sound.Play("bootup");
                     Thread.Sleep(3000);
                     Sound.Speak(cfg.MyParticipantName + " online.");
-                    Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInMeeting, true, msg);
+
+                    if (Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, msg))
+                    {
+                        Sound.Speak(msg);
+                    }
                 }
             }
         }
 
         private static int nTimerIterationID = 0;
-
-        private static void TimerIdleHandler(object o)
-        {
-            if (ShouldExit)
-            {
-                return;
-            }
-
-            Interlocked.Increment(ref nTimerIterationID);
-
-            if (!Monitor.TryEnter(_lock_eh))
-            {
-                hostApp.Log(LogType.WRN, "TimerIdleHandler {0:X4} - Busy; Will try again later", nTimerIterationID);
-                return;
-            }
-
-            try
-            {
-                //hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - Enter");
-
-                LoadGoodUsers();
-                ReadRemoteCommands();
-
-                // Zoom is really bad about moving/resizing it's windows, so keep it in check
-                Controller.LayoutWindows();
-
-                if (cfg.IsPaused)
-                {
-                    return;
-                }
-
-                //hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - DoParticipantActions", nTimerIterationID);
-                DoParticipantActions();
-
-                //hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - DoChatActions", nTimerIterationID);
-                DoChatActions();
-            }
-            catch (Controller.ZoomClosedException ex)
-            {
-                hostApp.Log(LogType.INF, ex.ToString());
-                ShouldExit = true;
-            }
-            catch (Exception ex)
-            {
-                hostApp.Log(LogType.ERR, "TimerIdleHandler {0:X4} - Unhandled Exception: {1}", nTimerIterationID, ex.ToString());
-            }
-            finally
-            {
-                //hostApp.Log(LogType.DBG, "TimerIdleHandler {0:X4} - Exit", nTimerIterationID);
-                Monitor.Exit(_lock_eh);
-            }
-        }
 
         /// <summary>Changes the specified mode to the specified state.</summary>
         /// <returns>Returns true if the state was changed.
@@ -705,19 +649,6 @@
             }
         }
 
-        private static void OnMeetingOptionStateChange(object sender, Controller.MeetingOptionStateChangeEventArgs e)
-        {
-            hostApp.Log(LogType.INF, "Meeting option {0} changed to {1}", repr(e.optionName), e.newState.ToString());
-        }
-
-        private static void OnParticipantAttendanceStatusChange(object sender, Controller.ParticipantEventArgs e)
-        {
-            Controller.Participant p = e.participant;
-            hostApp.Log(LogType.INF, "Participant {0} status {1}", repr(p.name), p.status.ToString());
-
-            // TBD: Could immediately admit recognized attendees
-        }
-
         private static readonly char[] SpaceDelim = new char[] { ' ' };
 
         /// <summary>
@@ -793,9 +724,9 @@
             return string.Format(text, GetFirstName(to), GetDayTime());
         }
 
-        private static readonly Dictionary<string, string> DicOneTimeHis = new Dictionary<string, string>();
+        private static readonly Dictionary<uint, string> DicOneTimeHis = new Dictionary<uint, string>();
 
-        private static string OneTimeHi(string text, string to)
+        private static string OneTimeHi(string text, Controller.Participant p)
         {
             string response = null;
 
@@ -805,7 +736,7 @@
             }
 
             // Do one-time "hi" only once
-            if (DicOneTimeHis.ContainsKey(to))
+            if (DicOneTimeHis.ContainsKey(p.userId))
             {
                 return null;
             }
@@ -821,15 +752,15 @@
 
             if (response != null)
             {
-                DicOneTimeHis.Add(to, response); // TBD: Really only need key hash
+                DicOneTimeHis.Add(p.userId, response); // TBD: Really only need key hash
             }
 
             return response;
         }
 
-        private static void SetSpeaker(Controller.Participant p, string from)
+        private static void SetSpeaker(Controller.Participant speaker, Controller.Participant from)
         {
-            Controller.SendChatMessage(from, "Speaker mode is not yet implemented");
+            _ = Controller.SendChatMessage(from, "Speaker mode is not yet implemented");
 
             /*
             if (p == null)
@@ -838,7 +769,7 @@
                 {
                     if (from != null)
                     {
-                        ZoomMeetingBotSDK.SendChatMessage(from, "Speaker mode is already off");
+                        ZoomMeetingBotSDK.Controller.SendChatMessage(from, "Speaker mode is already off");
                     }
 
                     return;
@@ -847,7 +778,7 @@
                 ZoomMeetingBotSDK.SetMeetingOption(ZoomMeetingBotSDK.MeetingOption.AllowParticipantsToUnmuteThemselves, System.Windows.Automation.ToggleState.On);
                 if (from != null)
                 {
-                    ZoomMeetingBotSDK.SendChatMessage(from, "Speaker mode turned off");
+                    ZoomMeetingBotSDK.Controller.SendChatMessage(from, "Speaker mode turned off");
                 }
 
                 return;
@@ -855,7 +786,7 @@
 
             if (from != null)
             {
-                ZoomMeetingBotSDK.SendChatMessage(from, $"Setting speaker to {p.name}");
+                ZoomMeetingBotSDK.Controller.SendChatMessage(from, $"Setting speaker to {p.name}");
             }
 
             ZoomMeetingBotSDK.SetMeetingOption(ZoomMeetingBotSDK.MeetingOption.MuteParticipantsUponEntry, System.Windows.Automation.ToggleState.On);
@@ -912,505 +843,6 @@
                 }
             }
             */
-        }
-
-        private static void OnChatMessageReceive(object source, Controller.ChatEventArgs e)
-        {
-            hostApp.Log(LogType.INF, "New message from {0} to {1}: {2}", repr(e.from), repr(e.to), repr(e.text));
-
-            string sTo = e.to;
-            string sFrom = e.from;
-            string sMsg = e.text.Trim();
-            string sReplyTo = sFrom;
-
-            if (!GoodUsers.TryGetValue(CleanUserName(sFrom), out bool bAdmin))
-            {
-                bAdmin = false;
-            }
-
-            // Ignore messages from me
-            if (sFrom.ToLower() == "me")
-            {
-                return;
-            }
-
-            if (!e.isPrivate)
-            {
-                // Message is to everyone (public), bail if my name is not in it
-                var withoutMyName = Regex.Replace(sMsg, @"\b" + cfg.MyParticipantName + @"\b", string.Empty, RegexOptions.IgnoreCase);
-
-                // If strings are the same, it's not to me
-                if (withoutMyName == sMsg)
-                {
-                    return;
-                }
-
-                sMsg = withoutMyName;
-
-                // My name is in it, so reply to everyone
-                sReplyTo = Controller.SpecialRecipient.EveryoneInMeeting;
-            }
-            else if (sTo.ToLower() != "me")
-            {
-                // Ignore it if it's not to me
-                return;
-            }
-
-            // All commands start with "/"; Treat everything else as small talk
-            if (!sMsg.StartsWith("/"))
-            {
-                // Try to get the best response possible; Fall back on something random if all else fails
-                //   TBD: Could make sure we don't say the same thing twice...
-
-                var isToEveryone = Controller.SpecialRecipient.IsEveryone(sReplyTo);
-
-                // If the bot is addressed publically or if there are only two people in the meeting, then reply with TTS
-                // TBD: Should be attending count, not participant count.  Some could be in the waiting room
-                var speak = isToEveryone || (Controller.participants.Count == 2);
-
-                // We start with a one-time hi.  Various bots may be in different time zones and the
-                //   good morning/afternoon/evening throws things off
-                var response = OneTimeHi(sMsg, sFrom);
-
-                // Handle canned responses based on broadcast keywords.  TBD: Move this into a bot
-                if (cfg.BroadcastCommands != null)
-                {
-                    foreach (var broadcastCommand in cfg.BroadcastCommands)
-                    {
-                        if (FastRegex.IsMatch($"\\b${broadcastCommand.Key}\\b", sMsg, RegexOptions.IgnoreCase))
-                        {
-                            response = broadcastCommand.Value;
-
-                            // Don't want to speak broadcast messages
-                            speak = false;
-                        }
-                    }
-                }
-
-                // Handle topic request
-                if (response == null)
-                {
-                    if (FastRegex.IsMatch($"\\b(topic|reading)\\b", sMsg, RegexOptions.IgnoreCase))
-                    {
-                        SendTopic(sReplyTo, true);
-                        return;
-                    }
-                }
-
-                // We did the one time hi, now feed the text to the chat bots!
-                if ((response == null) && (chatBots != null))
-                {
-                    // We'll try each bot in order by intelligence level until one of them works
-                    foreach (var chatBot in chatBots)
-                    {
-                        string failureMsg = null;
-                        try
-                        {
-                            response = chatBot.Converse(sMsg, sFrom);
-                            if (response == null)
-                            {
-                                failureMsg = "Response is null";
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            failureMsg = "Exception occured: " + ex.ToString();
-                            response = null;
-                        }
-
-                        if (response != null)
-                        {
-                            break;
-                        }
-
-                        hostApp.Log(LogType.WRN, $"ChatBot converse with {repr(chatBot.GetChatBotInfo().Name)} failed: {repr(failureMsg)}");
-                    }
-                }
-
-                if (response == null)
-                {
-                    hostApp.Log(LogType.ERR, "No ChatBot was able to produce a response");
-                }
-
-                Controller.SendChatMessage(sReplyTo, speak, FormatChatResponse(response, sFrom));
-
-                return;
-            }
-
-            // Non-priv retrival of topic
-            if (sMsg == "/topic")
-            {
-                SendTopic(sReplyTo, true);
-                return;
-            }
-
-            // Everything after here is a command.  Drop any commands not directly addressed to me
-            if (sTo.ToLower() != "me")
-            {
-                return;
-            }
-
-            // Only allow admin users to run the following commands
-            if (!bAdmin)
-            {
-                hostApp.Log(LogType.WRN, "Ignoring command {0} from non-admin {1}", repr(sMsg), repr(sFrom));
-                return;
-            }
-
-            if (!Controller.participants.TryGetValue(sFrom, out Controller.Participant sender))
-            {
-                hostApp.Log(LogType.ERR, "Received command {0} from {1}, but I don't have a Participant class for them", repr(sMsg), repr(e.from));
-                return;
-            }
-
-            string[] a = sMsg.Split(SpaceDelim, 2);
-
-            string sCommand = a[0].ToLower().Substring(1);
-
-            // All of the following commands require an argument
-            string sTarget = (a.Length == 1) ? null : (a[1].Length == 0 ? null : a[1]);
-
-            if (cfg.BroadcastCommands.TryGetValue(sCommand, out string sBroadcastMsg))
-            {
-                DateTime dtNow = DateTime.UtcNow;
-
-                if (BroadcastSentTime.TryGetValue(sCommand, out DateTime dtSentTime))
-                {
-                    int guardTime = cfg.BroadcastCommandGuardTimeSecs;
-
-                    if (guardTime < 0)
-                    {
-                        Controller.SendChatMessage(sender.name, $"{sCommand}: This broadcast message was already sent.");
-                        return;
-                    }
-
-                    if ((guardTime > 0) && (dtNow <= dtSentTime.AddSeconds(cfg.BroadcastCommandGuardTimeSecs)))
-                    {
-                        Controller.SendChatMessage(sender.name, $"{sCommand}: This broadcast message was already sent recently. Please try again later.");
-                        return;
-                    }
-                }
-
-                Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInMeeting, sBroadcastMsg);
-                BroadcastSentTime[sCommand] = dtNow;
-
-                return;
-            }
-
-            // Priv retrival or set of topic
-            if (sCommand == "topic")
-            {
-                if (sTarget == null)
-                {
-                    SendTopic(sender.name, true);
-                    return;
-                }
-
-                bool broadcast = false;
-                string reply;
-
-                string[] b = sTarget.Split(SpaceDelim, 2);
-
-                string cmd = b[0].ToLower().TrimStart('/');
-
-                if (cmd == "force")
-                {
-                    Topic = b[1];
-                    reply = "Topic forced to: " + Topic;
-                    broadcast = true;
-                }
-                else if ((cmd == "clear") || (cmd == "off"))
-                {
-                    if (Topic == null)
-                    {
-                        reply = "The topic has not been set; There is nothing to clear";
-                    }
-                    else
-                    {
-                        reply = "Topic cleared";
-                        Topic = null;
-                    }
-                }
-                else if (string.Compare(Topic, sTarget, true) == 0)
-                {
-                    reply = "The topic is already set to: " + sTarget;
-                }
-                else if (Topic == null)
-                {
-                    reply = "Topic set to: " + sTarget;
-                    Topic = sTarget;
-                    broadcast = true;
-                }
-                else
-                {
-                    reply = "Topic is already set; Use /topic force to change it";
-                }
-
-                Controller.SendChatMessage(sReplyTo, reply);
-
-                if (broadcast)
-                {
-                    Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInMeeting, GetTopic());
-                }
-
-                return;
-            }
-
-            // All of the following commands require options
-            if (sTarget == null)
-            {
-                return;
-            }
-
-            if (cfg.EmailCommands != null)
-            {
-                if (cfg.EmailCommands.TryGetValue(sCommand, out EmailCommandArgs emailCommandArgs))
-                {
-                    string[] args = sTarget.Trim().Split(SpaceDelim, 2);
-
-                    string toAddress = args[0];
-                    string subject = emailCommandArgs.Subject;
-                    string body = emailCommandArgs.Body;
-
-                    if (subject.Contains("{0}") || body.Contains("{0}"))
-                    {
-                        if (args.Length <= 1)
-                        {
-                            Controller.SendChatMessage(sender.name, $"Error: The format of the command is incorrect; Correct example: /{sCommand} {emailCommandArgs.ArgsExample}");
-                            return;
-                        }
-
-                        string emailArg = args[1].Trim();
-                        subject = subject.Replace("{0}", emailArg);
-                        body = body.Replace("{0}", emailArg);
-                    }
-
-                    if (SendEmail(subject, body, toAddress))
-                    {
-                        Controller.SendChatMessage(sender.name, $"{sCommand}: Successfully sent email to {toAddress}");
-                    }
-                    else
-                    {
-                        Controller.SendChatMessage(sender.name, $"{sCommand}: Failed to send email to {toAddress}");
-                    }
-
-
-                    return;
-                }
-            }
-
-            if ((sCommand == "citadel") || (sCommand == "lockdown") || (sCommand == "passive"))
-            {
-                string sNewMode = sTarget.ToLower().Trim();
-                bool bNewMode;
-
-                if (sNewMode == "on")
-                {
-                    bNewMode = true;
-                }
-                else if (sNewMode == "off")
-                {
-                    bNewMode = false;
-                }
-                else
-                {
-                    Controller.SendChatMessage(sender.name, "Sorry, the {0} command requires either on or off as a parameter", repr(sCommand));
-                    return;
-                }
-
-                if (SetMode(sCommand, bNewMode))
-                {
-                    Controller.SendChatMessage(sender.name, "{0} mode has been changed to {1}", GetFirstName(sCommand), sNewMode);
-                }
-                else
-                {
-                    Controller.SendChatMessage(sender.name, "{0} mode is already {1}", GetFirstName(sCommand), sNewMode);
-                }
-                return;
-            }
-
-            if (sCommand == "waitmsg")
-            {
-                var sWaitMsg = sTarget.Trim();
-
-                if ((sWaitMsg.Length == 0) || (sWaitMsg.ToLower() == "off"))
-                {
-                    if ((cfg.WaitingRoomAnnouncementMessage != null) && (cfg.WaitingRoomAnnouncementMessage.Length > 0))
-                    {
-                        cfg.WaitingRoomAnnouncementMessage = null;
-                        Controller.SendChatMessage(sender.name, "Waiting room message has been turned off");
-                    }
-                    else
-                    {
-                        Controller.SendChatMessage(sender.name, "Waiting room message is already off");
-                    }
-                }
-                else if (sWaitMsg == cfg.WaitingRoomAnnouncementMessage)
-                {
-                    Controller.SendChatMessage(sender.name, "Waiting room message is already set to:\n{0}", sTarget);
-                }
-                else
-                {
-                    cfg.WaitingRoomAnnouncementMessage = sTarget.Trim();
-                    Controller.SendChatMessage(sender.name, "Waiting room message has set to:\n{0}", sTarget);
-                }
-                return;
-            }
-
-            // Pre-processing for rename action
-            string newName = null;
-            if (sCommand == "rename")
-            {
-                string[] renameArgs = sTarget.Split(new string[] { " to " }, StringSplitOptions.RemoveEmptyEntries);
-                if (renameArgs.Length != 2)
-                {
-                    Controller.SendChatMessage(sender.name, "Please use the format: /{0} Old Name to New Name", sCommand);
-                    Controller.SendChatMessage(sender.name, "Example: /{0} iPad User to John Doe", sCommand);
-                    return;
-                }
-                sTarget = renameArgs[0];
-                newName = renameArgs[1];
-            }
-
-            // Handle special "/speaker off" command
-            if ((sCommand == "speaker") && (sTarget == "off"))
-            {
-                SetSpeaker(null, e.from);
-                return;
-            }
-
-            if ((sCommand == "speak") || (sCommand == "say"))
-            {
-                Controller.SendChatMessage(Controller.SpecialRecipient.EveryoneInMeeting, sCommand == "speak", sTarget);
-
-                return;
-            }
-
-            if (sCommand == "play")
-            {
-                Controller.SendChatMessage(sender.name, "Playing: {0}", repr(sTarget));
-                Sound.Play(sTarget);
-                return;
-            }
-
-            // If the sender refers to themselves as "me", resolve this to their actual participant name
-            if (sTarget.ToLower() == "me")
-            {
-                sTarget = e.from;
-            }
-
-            // All of the following require a participant target
-            if (!Controller.participants.TryGetValue(sTarget, out Controller.Participant target))
-            {
-                Controller.SendChatMessage(sender.name, "Sorry, I don't see anyone named here named {0}. Remember, Case Matters!", repr(sTarget));
-                return;
-            }
-
-            // Make sure I'm not the target :p
-            if (target.isMe)
-            {
-                Controller.SendChatMessage(sender.name, "U Can't Touch This\n* MC Hammer Music *\nhttps://youtu.be/otCpCn0l4Wo");
-                return;
-            }
-
-            // Do rename if requested
-            if (newName != null)
-            {
-                if (target.name == sender.name)
-                {
-                    Controller.SendChatMessage(sender.name, "Why don't you just rename yourself?");
-                    return;
-                }
-
-                Controller.SendChatMessage(sender.name, "Renaming {0} to {1}", repr(target.name), repr(newName));
-                Controller.RenameParticipant(target, newName);
-                return;
-            }
-
-            if (sCommand == "admit")
-            {
-                if (target.status != Controller.ParticipantStatus.Waiting)
-                {
-                    Controller.SendChatMessage(sender.name, "Sorry, {0} is not waiting", repr(target.name));
-                }
-                else
-                {
-                    Controller.SendChatMessage(sender.name, "Admitting {0}", repr(target.name));
-                    if (Controller.AdmitParticipant(target))
-                    {
-                        // Participant was successfully admitted.  We want to send them the topic if one is set, but we can't do that
-                        //   while they are in the waiting room (DMs cannot be sent to waiting room participants, only broadcast messages),
-                        //   so queue up the message for later after they are admitted.
-                        //SendTopic(target.name, false);
-                    }
-                }
-
-                return;
-            }
-
-            // Commands after here require the participant to be attending
-            if (target.status != Controller.ParticipantStatus.Attending)
-            {
-                Controller.SendChatMessage(sender.name, "Sorry, {0} is not attending", repr(target.name));
-                return;
-            }
-
-            if ((sCommand == "cohost") || (sCommand == "promote"))
-            {
-                if (target.role != Controller.ParticipantRole.None)
-                {
-                    Controller.SendChatMessage(sender.name, "Sorry, {0} is already Host or Co-Host so cannot be promoted", repr(target.name));
-                }
-                else if (target.videoStatus != Controller.ParticipantVideoStatus.On)
-                {
-                    Controller.SendChatMessage(sender.name, "Co-Host name matched for {0}, but video is off", repr(target.name));
-                    return;
-                }
-                else
-                {
-                    Controller.SendChatMessage(sender.name, "Promoting {0} to Co-Host", repr(target.name));
-                    Controller.PromoteParticipant(target);
-                }
-
-                return;
-            }
-
-            if (sCommand == "demote")
-            {
-                if (target.role != Controller.ParticipantRole.CoHost)
-                {
-                    Controller.SendChatMessage(sender.name, "Sorry, {0} isn't Co-Host so cannot be demoted", repr(target.name));
-                }
-                else
-                {
-                    Controller.SendChatMessage(sender.name, "Demoting {0}", repr(target.name));
-                    Controller.DemoteParticipant(target);
-                }
-
-                return;
-            }
-
-            if (sCommand == "mute")
-            {
-                Controller.SendChatMessage(sender.name, "Muting {0}", repr(target.name));
-                Controller.MuteParticipant(target);
-                return;
-            }
-
-            if (sCommand == "unmute")
-            {
-                Controller.SendChatMessage(sender.name, "Requesting {0} to Unmute", repr(target.name));
-                Controller.UnmuteParticipant(target);
-                return;
-            }
-
-            if (sCommand == "speaker")
-            {
-                SetSpeaker(target, e.from);
-                return;
-            }
-
-            Controller.SendChatMessage(sender.name, "Sorry, I don't know the command {0}", repr(sCommand));
         }
 
         private static List<IChatBot> chatBots = null;
@@ -1490,7 +922,7 @@
         {
             if (!endForAll)
             {
-                if (Controller.me.role != Controller.ParticipantRole.Host)
+                if (!Controller.me.isHost)
                 {
                     hostApp.Log(LogType.DBG, "BOT LeaveMeeting - I am not host");
                 }
@@ -1501,7 +933,8 @@
                     Controller.Participant altHost = null;
                     foreach (Controller.Participant p in Controller.participants.Values)
                     {
-                        if (p.role == Controller.ParticipantRole.CoHost)
+                        // TBD: Could also verify the participant is GoodUser^
+                        if (p.isCoHost)
                         {
                             altHost = p;
                             break;
@@ -1515,15 +948,14 @@
                     }
                     else
                     {
-                        try
+                        hostApp.Log(LogType.INF, $"BOT LeaveMeeting - Passing Host to {altHost}");
+                        if (Controller.PromoteParticipant(altHost, Controller.ParticipantRole.Host))
                         {
-                            hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passing Host to {0}", repr(altHost.name));
-                            Controller.PromoteParticipant(altHost, Controller.ParticipantRole.Host);
-                            hostApp.Log(LogType.INF, "BOT LeaveMeeting - Passed Host to {0}", repr(altHost.name));
+                            hostApp.Log(LogType.INF, $"BOT LeaveMeeting - Passed Host to {altHost}");
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Failed to pass Host to {0}; Ending meeting", repr(altHost.name));
+                            hostApp.Log(LogType.ERR, $"BOT LeaveMeeting - Failed to pass Host to {altHost}; Ending meeting");
                             endForAll = true;
                         }
                     }
@@ -1531,9 +963,10 @@
             }
 
             hostApp.Log(LogType.INF, "BOT LeaveMeeting - Leaving Meeting");
-            Controller.LeaveMeeting(endForAll);
+            _ = Controller.LeaveMeeting(endForAll);
         }
 
+        /*
         protected virtual void Dispose(bool disposing)
         {
             if (!disposing)
@@ -1543,6 +976,7 @@
 
             tmrIdle.Dispose();
         }
+        */
 
         private static GmailSenderLib.GmailSender gmailSender = null;
         private static bool SendEmail(string subject, string body, string to)
@@ -1573,8 +1007,8 @@
 
             hostApp.SettingsChanged += new EventHandler(SettingsChanged);
 
-            controller = new Controller();
-            controller.Init(hostApp);
+            Controller.Init(hostApp);
+            Sound.Init(hostApp);
         }
 
         public void Start()
@@ -1584,19 +1018,679 @@
                 chatBots = GetChatBots();
             }
 
-            Controller.ParticipantAttendanceStatusChange += OnParticipantAttendanceStatusChange;
-            Controller.ChatMessageReceive += OnChatMessageReceive;
-            Controller.MeetingOptionStateChange += OnMeetingOptionStateChange;
+            Controller.OnChatMessageReceive += Controller_OnChatMessageReceive;
+            Controller.OnParticipantJoinWaitingRoom += Controller_OnParticipantJoinWaitingRoom;
+            Controller.OnParticipantLeaveWaitingRoom += Controller_OnParticipantLeaveWaitingRoom;
+            Controller.OnParticipantJoinMeeting += Controller_OnParticipantJoinMeeting;
+            Controller.OnParticipantLeaveMeeting += Controller_OnParticipantLeaveMeeting;
+            Controller.OnActionTimerTick += Controller_OnActionTimerTick;
+            Controller.OnExit += Controller_OnExit;
+
             Controller.Start();
 
-            tmrIdle = new System.Threading.Timer(TimerIdleHandler, null, 0, 5000);
+            //tmrIdle = new System.Threading.Timer(ActionTimer, null, 0, 5000);
 
             return;
+        }
+
+        private void Controller_OnActionTimerTick(object sender, EventArgs e)
+        {
+            if (ShouldExit)
+            {
+                return;
+            }
+
+            Interlocked.Increment(ref nTimerIterationID);
+
+            if (!Monitor.TryEnter(_lock_eh))
+            {
+                hostApp.Log(LogType.WRN, "ActionTimer {0:X4} - Busy; Will try again later", nTimerIterationID);
+                return;
+            }
+
+            try
+            {
+                //hostApp.Log(LogType.DBG, "ActionTimer {0:X4} - Enter");
+
+                LoadGoodUsers();
+                ReadRemoteCommands();
+
+                if (cfg.IsPaused)
+                {
+                    return;
+                }
+
+                //hostApp.Log(LogType.DBG, "ActionTimer {0:X4} - DoParticipantActions", nTimerIterationID);
+                DoParticipantActions();
+            }
+            /* TBD: Do something about this?
+            catch (Controller.ZoomClosedException ex)
+            {
+                hostApp.Log(LogType.INF, ex.ToString());
+                ShouldExit = true;
+            }
+            */
+            catch (Exception ex)
+            {
+                hostApp.Log(LogType.ERR, "ActionTimer {0:X4} - Unhandled Exception: {1}", nTimerIterationID, ex.ToString());
+            }
+            finally
+            {
+                //hostApp.Log(LogType.DBG, "ActionTimer {0:X4} - Exit", nTimerIterationID);
+                Monitor.Exit(_lock_eh);
+            }
+        }
+
+        private void Controller_OnExit(object sender, EventArgs e)
+        {
+            ShouldExit = true;
+        }
+
+        private void Controller_OnParticipantJoinMeeting(object sender, Controller.OnParticipantJoinMeetingArgs e)
+        {
+            var p = e.participant;
+
+            // Send the topic if configured to do so
+            if ((cfg.BotAutomationFlags & BotAutomationFlag.SendTopicOnJoin) != 0)
+            {
+                SendTopic(p, false);
+            }
+
+            // Handle automatically co-hosting folks here if needed
+            // TBD: Repeat this in timer handler too in case I become host later
+
+            if ((cfg.BotAutomationFlags & BotAutomationFlag.CoHostKnown) == 0)
+            {
+                // Nothing to do
+                return;
+            }
+
+            string cleanName = CleanUserName(p.name);
+            GoodUsers.TryGetValue(cleanName, out bool bUserShouldBeCoHost);
+
+            if (!bUserShouldBeCoHost)
+            {
+                // Nothing to do
+                return;
+            }
+
+            if ((!Controller.me.isHost) && (!Controller.me.isCoHost))
+            {
+                hostApp.Log(LogType.WRN, $"BOT Participant {p} should be Co-Host, but I am not Co-Host or Host");
+                return;
+            }
+
+            hostApp.Log(LogType.INF, $"BOT Promoting {p} to Co-host");
+            _ = Controller.PromoteParticipant(p, Controller.ParticipantRole.CoHost);
+        }
+
+        private void Controller_OnParticipantLeaveMeeting(object sender, Controller.OnParticipantLeaveMeetingArgs e)
+        {
+            // Nothing to do yet ...
+        }
+
+        private void Controller_OnParticipantJoinWaitingRoom(object sender, Controller.OnParticipantJoinWaitingRoomArgs e)
+        {
+            var bAdmitKnown = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitKnown) != 0;
+            //var bAdmitOthers = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitOthers) != 0;
+
+            //if (!(bAdmitKnown || bAdmitOthers))
+            if (!bAdmitKnown)
+            {
+                return; // Nothing to do
+            }
+
+            var p = e.participant;
+            var sCleanName = CleanUserName(p.name);
+            if (GoodUsers.ContainsKey(sCleanName))
+            {
+                if (bAdmitKnown)
+                {
+                    hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", repr(p.name));
+                    _ = Controller.AdmitParticipant(p);
+                }
+            }
+        }
+
+        private void Controller_OnParticipantLeaveWaitingRoom(object sender, Controller.OnParticipantLeaveWaitingRoomArgs e)
+        {
+            // Nothing to do for now ...
+        }
+
+        private void Controller_OnChatMessageReceive(object sender, Controller.OnChatMessageReceiveArgs e)
+        {
+            var to = e.to;
+            var from = e.from;
+            var text = e.text;
+
+            // NOTE: Apparently isPrivate=true if there are only two people in the meeting, even if messages are sent to Everyone
+            // TBD: Verify isPrivate=false if there are > 2 ppl in mtg
+            var isPrivate = e.isPrivate;
+
+            var isToEveryone = Controller.SpecialParticipant.IsEveryone(to);
+
+            // TBD: All of this parsing is really messy. It could use a re-write!
+
+            // If the message is from the bot or we're not configured to process chat messages, then bail
+            if (e.from.isMe || ((cfg.BotAutomationFlags & BotAutomationFlag.ProcessChat) == 0))
+            {
+                return;
+            }
+
+            Controller.Participant replyTo = null;
+
+            if (isToEveryone)
+            {
+                // If there are only two people in the meeting, isPrivate=true and we can assume they are talking to the bot.
+                //   If there is more than one person in the meeting, isPrivate=false and we check for the bot's name so we can be sure they are talking to it.
+                var withoutMyName = Regex.Replace(text, @"\b" + cfg.MyParticipantName + @"\b", string.Empty, RegexOptions.IgnoreCase);
+                if ((withoutMyName == text) && (!isPrivate))
+                {
+                    return;
+                }
+
+                // My name is in it!  Treat it like a private message to me (sans my name), but reply to everyone in the meeting
+                text = withoutMyName;
+                replyTo = Controller.SpecialParticipant.everyoneInMeeting;
+            }
+            else
+            {
+                replyTo = from;
+            }
+
+            // ====
+            // Handle small talk
+            // ====
+
+            // All commands start with "/"; Treat everything else as small talk
+            if (!text.StartsWith("/"))
+            {
+                // If the bot is addressed publically or if there are only two people in the meeting, then reply with TTS
+                // TBD: Should be attending count, not participant count.  Some could be in the waiting room
+                var speak = !isPrivate || (Controller.participants.Count == 2);
+
+                // We start with a one-time hi.  Various bots may be in different time zones and the good morning/afternoon/evening throws things off
+                var response = OneTimeHi(text, from);
+
+                // Handle canned responses based on broadcast keywords.  TBD: Move this into a bot
+                if (cfg.BroadcastCommands != null)
+                {
+                    foreach (var broadcastCommand in cfg.BroadcastCommands)
+                    {
+                        if (FastRegex.IsMatch(text, $"\\b${broadcastCommand.Key}\\b", RegexOptions.IgnoreCase))
+                        {
+                            response = broadcastCommand.Value;
+
+                            // Don't want to speak broadcast messages
+                            speak = false;
+                        }
+                    }
+                }
+
+                // Handle topic request
+                if (response == null)
+                {
+                    if (FastRegex.IsMatch(text, $"\\b(topic|reading)\\b", RegexOptions.IgnoreCase))
+                    {
+                        SendTopic(replyTo, true);
+                        return;
+                    }
+                }
+
+                // We did the one time hi, now feed the text to the chat bots!
+                if ((response == null) && (chatBots != null))
+                {
+                    // We'll try each bot in order by intelligence level until one of them works
+                    foreach (var chatBot in chatBots)
+                    {
+                        string failureMsg = null;
+                        try
+                        {
+                            response = chatBot.Converse(text, from.name); // TBD: from.userId?
+                            if (response == null)
+                            {
+                                failureMsg = "Response is null";
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            failureMsg = "Exception occured: " + ex.ToString();
+                            response = null;
+                        }
+
+                        if (response != null)
+                        {
+                            break;
+                        }
+
+                        hostApp.Log(LogType.WRN, $"ChatBot converse with {repr(chatBot.GetChatBotInfo().Name)} failed: {repr(failureMsg)}");
+                    }
+                }
+
+                if (response == null)
+                {
+                    hostApp.Log(LogType.ERR, "No ChatBot was able to produce a response");
+                }
+
+                response = FormatChatResponse(response, from.name);
+                if (Controller.SendChatMessage(replyTo, response) && speak)
+                {
+                    Sound.Speak(response);
+                }
+
+                return;
+            }
+
+            // ====
+            // Handle non-priviledged commands
+            // ====
+
+            // Drop any commands not addressed directly to me
+            if (!to.isMe)
+            {
+                return;
+            }
+
+            // Determine if sender is admin or not
+            GoodUsers.TryGetValue(CleanUserName(e.from.name), out bool bAdmin);
+
+            // Non-priviledged retrival of topic
+            if ((!bAdmin) && (text == "/topic"))
+            {
+                SendTopic(replyTo, true);
+                return;
+            }
+
+            // ====
+            // Handle priviledged commands
+            // ====
+
+            // Only allow admin users to run priviledged commands
+            if (!bAdmin)
+            {
+                hostApp.Log(LogType.WRN, $"Ignoring command {repr(text)} from non-admin {from}");
+                return;
+            }
+
+            string[] a = text.Split(SpaceDelim, 2);
+
+            string sCommand = a[0].ToLower().Substring(1);
+
+            // All of the following commands require an argument
+            string sTarget = (a.Length == 1) ? null : (a[1].Length == 0 ? null : a[1]);
+
+            if (cfg.BroadcastCommands.TryGetValue(sCommand, out string broadcastMsg))
+            {
+                DateTime dtNow = DateTime.UtcNow;
+
+                if (BroadcastSentTime.TryGetValue(sCommand, out DateTime dtSentTime))
+                {
+                    int guardTime = cfg.BroadcastCommandGuardTimeSecs;
+
+                    if (guardTime < 0)
+                    {
+                        _ = Controller.SendChatMessage(replyTo, $"{sCommand}: This broadcast message was already sent.");
+                        return;
+                    }
+
+                    if ((guardTime > 0) && (dtNow <= dtSentTime.AddSeconds(cfg.BroadcastCommandGuardTimeSecs)))
+                    {
+                        _ = Controller.SendChatMessage(replyTo, $"{sCommand}: This broadcast message was already sent recently. Please try again later.");
+                        return;
+                    }
+                }
+
+                if (Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, broadcastMsg))
+                {
+                    BroadcastSentTime[sCommand] = dtNow;
+                }
+
+                return;
+            }
+
+            // Priv retrival or set of topic
+            if (sCommand == "topic")
+            {
+                if (sTarget == null)
+                {
+                    SendTopic(replyTo, true);
+                    return;
+                }
+
+                bool broadcast = false;
+                string reply;
+
+                string[] b = sTarget.Split(SpaceDelim, 2);
+
+                string cmd = b[0].ToLower().TrimStart('/');
+
+                if (cmd == "force")
+                {
+                    Topic = b[1];
+                    reply = "Topic forced to: " + Topic;
+                    broadcast = true;
+                }
+                else if ((cmd == "clear") || (cmd == "off"))
+                {
+                    if (Topic == null)
+                    {
+                        reply = "The topic has not been set; There is nothing to clear";
+                    }
+                    else
+                    {
+                        reply = "Topic cleared";
+                        Topic = null;
+                    }
+                }
+                else if (string.Compare(Topic, sTarget, true) == 0)
+                {
+                    reply = "The topic is already set to: " + sTarget;
+                }
+                else if (Topic == null)
+                {
+                    reply = "Topic set to: " + sTarget;
+                    Topic = sTarget;
+                    broadcast = true;
+                }
+                else
+                {
+                    reply = "Topic is already set; Use /topic force to change it";
+                }
+
+                _ = Controller.SendChatMessage(replyTo, reply);
+
+                if (broadcast)
+                {
+                    _ = Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, GetTopic());
+                }
+
+                return;
+            }
+
+            // All of the following commands require options
+
+            if (sTarget == null)
+            {
+                return;
+            }
+
+            if (cfg.EmailCommands != null)
+            {
+                if (cfg.EmailCommands.TryGetValue(sCommand, out EmailCommandArgs emailCommandArgs))
+                {
+                    string[] args = sTarget.Trim().Split(SpaceDelim, 2);
+
+                    string toAddress = args[0];
+                    string subject = emailCommandArgs.Subject;
+                    string body = emailCommandArgs.Body;
+
+                    if (subject.Contains("{0}") || body.Contains("{0}"))
+                    {
+                        if (args.Length <= 1)
+                        {
+                            _ = Controller.SendChatMessage(replyTo, $"Error: The format of the command is incorrect; Correct example: /{sCommand} {emailCommandArgs.ArgsExample}");
+                            return;
+                        }
+
+                        string emailArg = args[1].Trim();
+                        subject = subject.Replace("{0}", emailArg);
+                        body = body.Replace("{0}", emailArg);
+                    }
+
+                    if (SendEmail(subject, body, toAddress))
+                    {
+                        _ = Controller.SendChatMessage(replyTo, $"{sCommand}: Successfully sent email to {toAddress}");
+                    }
+                    else
+                    {
+                        _ = Controller.SendChatMessage(replyTo, $"{sCommand}: Failed to send email to {toAddress}");
+                    }
+
+                    return;
+                }
+            }
+
+            if ((sCommand == "citadel") || (sCommand == "lockdown") || (sCommand == "passive"))
+            {
+                string sNewMode = sTarget.ToLower().Trim();
+                bool bNewMode;
+
+                if (sNewMode == "on")
+                {
+                    bNewMode = true;
+                }
+                else if (sNewMode == "off")
+                {
+                    bNewMode = false;
+                }
+                else
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, the {sCommand} command requires either on or off as a parameter");
+                    return;
+                }
+
+                if (SetMode(sCommand, bNewMode))
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"{sCommand} mode has been changed to {sNewMode}");
+                }
+                else
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"{sCommand} mode is already {sNewMode}");
+                }
+
+                return;
+            }
+
+            if (sCommand == "waitmsg")
+            {
+                var sWaitMsg = sTarget.Trim();
+
+                if ((sWaitMsg.Length == 0) || (sWaitMsg.ToLower() == "off"))
+                {
+                    if ((cfg.WaitingRoomAnnouncementMessage != null) && (cfg.WaitingRoomAnnouncementMessage.Length > 0))
+                    {
+                        cfg.WaitingRoomAnnouncementMessage = null;
+                        _ = Controller.SendChatMessage(replyTo, "Waiting room message has been turned off");
+                    }
+                    else
+                    {
+                        _ = Controller.SendChatMessage(replyTo, "Waiting room message is already off");
+                    }
+                }
+                else if (sWaitMsg == cfg.WaitingRoomAnnouncementMessage)
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"Waiting room message is already set to:\n{sTarget}");
+                }
+                else
+                {
+                    cfg.WaitingRoomAnnouncementMessage = sTarget.Trim();
+                    _ = Controller.SendChatMessage(replyTo, $"Waiting room message has set to:\n{sTarget}");
+                }
+
+                return;
+            }
+
+            // Pre-processing for rename action
+            string newName = null;
+            if (sCommand == "rename")
+            {
+                string[] renameArgs = sTarget.Split(new string[] { " to " }, StringSplitOptions.RemoveEmptyEntries);
+                if (renameArgs.Length != 2)
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"Please use the format: /{sCommand} Old Name to New Name\nExample: /{sCommand} iPad User to John Doe");
+                    return;
+                }
+
+                sTarget = renameArgs[0];
+                newName = renameArgs[1];
+            }
+
+            // Handle special "/speaker off" command
+            if ((sCommand == "speaker") && (sTarget == "off"))
+            {
+                SetSpeaker(null, e.from);
+                return;
+            }
+
+            if ((sCommand == "speak") || (sCommand == "say"))
+            {
+                if (Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, sTarget))
+                {
+                    Sound.Speak(sTarget);
+                }
+
+                return;
+            }
+
+            if (sCommand == "play")
+            {
+                if (Controller.SendChatMessage(replyTo, $"Playing: {repr(sTarget)}"))
+                {
+                    Sound.Play(sTarget);
+                }
+
+                return;
+            }
+
+            // All of the following commands require a target participant
+
+            // If the sender refers to themselves as "me", resolve this to their actual participant name
+            Controller.Participant target = null;
+            if (sTarget.ToLower() == "me")
+            {
+                target = from;
+            }
+            else
+            {
+                try
+                {
+                    target = Controller.GetParticipantByName(sTarget);
+                }
+                catch (ArgumentException)
+                {
+                    // TBD: Return userId or some other unique info?
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, there is more than one participant here named {repr(sTarget)}. I'm not sure which one you mean...");
+                    return;
+                }
+            }
+
+            if (target == null)
+            {
+                // TBD: Try regex/partial match, returning results?
+                _ = Controller.SendChatMessage(replyTo, $"Sorry, I don't see anyone named here named {repr(sTarget)}. Remember, Case Matters!");
+                return;
+            }
+
+            // All of the following require a participant target
+
+            // Make sure I'm not the target :p
+            if (target.isMe)
+            {
+                _ = Controller.SendChatMessage(replyTo, "U Can't Touch This\n* MC Hammer Music *\nhttps://youtu.be/otCpCn0l4Wo");
+                return;
+            }
+
+            // Do rename if requested
+
+            // TBD: Can you rename someone in the waiting room using the SDK?
+            if (newName != null)
+            {
+                if (target.name == from.name)
+                {
+                    _ = Controller.SendChatMessage(replyTo, "Why don't you just rename yourself?");
+                    return;
+                }
+
+                var success = Controller.RenameParticipant(target, newName);
+                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully renamed" : "Failed to rename")} {repr(target.name)} to {repr(newName)}");
+
+                return;
+            }
+
+            if (sCommand == "admit")
+            {
+                if (target.status != Controller.ParticipantStatus.Waiting)
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.name)} is not in the waiting room");
+                }
+                else
+                {
+                    var success = Controller.AdmitParticipant(target);
+                    _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully admitted" : "Failed to admit")} {repr(target.name)}");
+                }
+
+                return;
+            }
+
+            // Commands after here require the participant to be attending
+            if (target.status != Controller.ParticipantStatus.Attending)
+            {
+                _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.name)} is not attending");
+                return;
+            }
+
+            if ((sCommand == "cohost") || (sCommand == "promote"))
+            {
+                if (target.isHost || target.isCoHost)
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.name)} is already Host or Co-Host so cannot be promoted");
+                    return;
+                }
+                else if (!target.isVideoOn)
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, I'm not allowed to Co-Host {repr(target.name)} because their video is off");
+                    return;
+                }
+
+                var success = Controller.PromoteParticipant(target, Controller.ParticipantRole.CoHost);
+                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully promoted" : "Failed to promote")} {repr(target.name)}");
+
+                return;
+            }
+
+            if (sCommand == "demote")
+            {
+                if (!target.isCoHost)
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.name)} isn't Co-Host so they cannot be demoted");
+                    return;
+                }
+
+                var success = Controller.DemoteParticipant(target);
+                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully demoted" : "Failed to demote")} {repr(target.name)}");
+
+                return;
+            }
+
+            if (sCommand == "mute")
+            {
+                var success = Controller.MuteParticipant(target);
+                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully muted" : "Failed to mute")} {repr(target.name)}");
+
+                return;
+            }
+
+            if (sCommand == "unmute")
+            {
+                var success = Controller.UnmuteParticipant(target);
+                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully unmuted" : "Failed to unmute")} {repr(target.name)}");
+
+                return;
+            }
+
+            if (sCommand == "speaker")
+            {
+                SetSpeaker(target, e.from);
+                return;
+            }
+
+            _ = Controller.SendChatMessage(replyTo, $"Sorry, I don't know the command {sCommand}");
         }
 
         public void Stop()
         {
             ShouldExit = true;
+            Controller.Stop();
         }
 
         public void SettingsChanged(object sender, EventArgs e)

@@ -137,8 +137,8 @@ namespace ZoomMeetingBotSDK
         private static HostApp hostApp;
 
         private static ProgramSettings programSettings = null;
-        private static bool debuggerAttached = false;
 
+        [STAThread]
         private static int Main(string[] args)
         {
             hostApp = new HostApp();
@@ -149,7 +149,7 @@ namespace ZoomMeetingBotSDK
 
             if (Array.IndexOf(args, "/protect") != -1)
             {
-                Console.Write("Unprotected Value: ");
+                Console.WriteLine("Unprotected Value:");
 
                 StringBuilder pass = new StringBuilder();
                 while (true)
@@ -182,18 +182,18 @@ namespace ZoomMeetingBotSDK
 
                 if (unprot == passString)
                 {
-                    Console.WriteLine("Protected Value:");
-                    Console.WriteLine(prot);
-                    Console.WriteLine();
+                    Console.WriteLine($"\nProtected Value:\n{prot}");
                 }
                 else
                 {
                     Console.WriteLine("ERROR: Decryption test failed");
                 }
 
+                /*
                 Console.WriteLine();
                 Console.WriteLine("Press ENTER to exit");
                 Console.ReadLine();
+                */
 
                 return 0;
             }
@@ -318,12 +318,15 @@ namespace ZoomMeetingBotSDK
                         if (keyInfo.Modifiers == 0)
                         {
                             var ch = keyInfo.KeyChar;
+                            /*
                             if (ch == 'a')
                             {
                                 Console.WriteLine("CONSOLE : LogAETree Requested");
                                 Controller.LogAETree();
                             }
-                            else if (ch == 'p')
+                            else
+                            */
+                            if (ch == 'p')
                             {
                                 if (paused)
                                 {
@@ -355,16 +358,16 @@ namespace ZoomMeetingBotSDK
             while (!UsherBot.ShouldExit)
             {
                 Application.DoEvents();
-                Thread.Sleep(100);
+                Thread.Sleep(10);
             }
-
+            
             Console.WriteLine("Exiting");
             return 0;
         }
 
         private static void WaitDebuggerAttach(bool force = false)
         {
-            if (debuggerAttached || ((!force) && ((programSettings == null) || (!programSettings.WaitForDebuggerAttach))))
+            if (Debugger.IsAttached || ((!force) && ((programSettings == null) || (!programSettings.WaitForDebuggerAttach))))
             {
                 return;
             }

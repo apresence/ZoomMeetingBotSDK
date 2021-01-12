@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("UsherBot")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("Sample In-Meeting Control Bot for Zoom Meetings")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("zerodayvenerabilities.com")]
 [assembly: AssemblyProduct("UsherBot")]

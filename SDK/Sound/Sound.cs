@@ -16,6 +16,16 @@
         private static ConcurrentQueue<SoundItem> q = new ConcurrentQueue<SoundItem>();
         private static System.Threading.Timer timer;
 
+        public class SoundConfigurationSettings
+        {
+            /// <summary>
+            /// Name of TTS voice to use.  For further details, see:
+            ///   https://docs.microsoft.com/en-us/dotnet/api/system.speech.synthesis.speechsynthesizer.selectvoice?view=netframework-4.8.
+            /// </summary>
+            public string TTSVoice { get; set; }
+        }
+        private static SoundConfigurationSettings cfg = null;
+
         private class SoundItem
         {
             public string Action;
@@ -36,9 +46,13 @@
                 return;
             }
 
+            hostApp = app;
+
+            cfg = DeserializeJson<SoundConfigurationSettings>(hostApp.GetSettingsAsJSON());
+
             hostApp.Log(LogType.DBG, "Initializing TTS");
             tts = new SpeechSynthesizer();
-            var voice = hostApp.GetSetting("TTSVoice");
+            var voice = cfg.TTSVoice;
             if ((voice != null) && (voice.Length > 0))
             {
                 try

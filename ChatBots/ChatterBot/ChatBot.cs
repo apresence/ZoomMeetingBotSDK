@@ -92,7 +92,14 @@
                 if (bStarted)
                 {
                     hostApp.Log(LogType.DBG, "chatBot stopping");
-                    p.StandardInput.WriteLine("quit");
+                    try
+                    {
+                        p.StandardInput.WriteLine("quit");
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                    }
+
                     if (p.WaitForExit(2000))
                     {
                         p = null;

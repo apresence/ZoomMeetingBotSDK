@@ -31,7 +31,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ChatBots", "ChatBots", "{34
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Demo", "Demo", "{C6295193-9929-4EE2-9052-BA56F0D2265B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomMeetingBotSDK.Controller", "SDK\Controller\ZoomMeetingBotSDK.Controller\ZoomMeetingBotSDK.Controller.csproj", "{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZoomMeetingBotSDK.Controller", "SDK\Controller\ZoomMeetingBotSDK.Controller.csproj", "{9AFA8B81-D988-40CD-AE15-17AC4ACAA7D2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

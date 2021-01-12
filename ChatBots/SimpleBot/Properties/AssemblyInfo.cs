@@ -6,11 +6,11 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("ZoomMeetingBotSDK.ChatBot.SimpleBot")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("Simple In-Meeting Chat Bot for Zoom Meetings")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("ZoomMeetingBotSDK.ChatBot.SimpleBot")]
-[assembly: AssemblyCopyright("Copyright ©  2021")]
+[assembly: AssemblyCompany("zerodayvenerabilities.com")]
+[assembly: AssemblyProduct("ZoomMeetingBotSDK")]
+[assembly: AssemblyCopyright("Copyright © Zero Day Venerabilities. All rights reserved.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

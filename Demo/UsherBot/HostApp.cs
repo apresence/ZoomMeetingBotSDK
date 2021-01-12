@@ -31,7 +31,6 @@
         private static System.Threading.Timer idleTimer = null;
         private static DateTime lastSettingsModDT = DateTime.MinValue;
 
-        private static volatile bool debugLoggingEnabled = false;
         private static volatile bool shouldExit = false;
         private static volatile int idleTimerTicks = 0;
 
@@ -232,7 +231,7 @@
                 LoadSettings();
 
                 // Zoom is really bad about moving/resizing it's windows, so keep it in check
-                //Controller.LayoutWindows();
+                Controller.LayoutWindows();
             }
             catch (Exception ex)
             {

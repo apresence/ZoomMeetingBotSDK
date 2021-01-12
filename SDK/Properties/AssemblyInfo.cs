@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ZoomMeetingBotSDK.Utils")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("ZoomMeetingBotSDK")]
+[assembly: AssemblyDescription("In-Meeting Bot SDK for Zoom Meetings")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("ZoomMeetingBotSDK.Utils")]
-[assembly: AssemblyCopyright("Copyright ©  2021")]
+[assembly: AssemblyCompany("zerodayvenerabilities.com")]
+[assembly: AssemblyProduct("ZoomMeetingBotSDK")]
+[assembly: AssemblyCopyright("Copyright © Zero Day Venerabilities. All rights reserved.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

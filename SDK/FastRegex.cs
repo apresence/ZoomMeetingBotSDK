@@ -72,12 +72,12 @@
             re = RegexCache.Get(pattern, RegexOptions.None);
         }
 
-        public static bool IsMatch(string pattern, string input, RegexOptions options)
+        public static bool IsMatch(string input, string pattern, RegexOptions options)
         {
             return RegexCache.Get(pattern, options).IsMatch(input);
         }
 
-        public static bool IsMatch(string pattern, string input)
+        public static bool IsMatch(string input, string pattern)
         {
             return RegexCache.Get(pattern, RegexOptions.None).IsMatch(input);
         }
