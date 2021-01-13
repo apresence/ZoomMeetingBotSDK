@@ -21,8 +21,11 @@ namespace ZoomMeetingBotSDK
     public class UsherBot : IControlBot
     {
 #pragma warning disable SA1401 // Fields should be private
-        public static volatile bool ShouldExit = false;
+        public static volatile bool shouldExit = false;
 #pragma warning restore SA1401 // Fields should be private
+        private static volatile bool leaveMeeting = false;
+        private static volatile bool leavingMeeting = false;
+        private static volatile bool endForAll = true;
 
         private static IHostApp hostApp;
 
@@ -525,16 +528,16 @@ namespace ZoomMeetingBotSDK
                     {
                         SetMode("passive", line.EndsWith(":on"));
                     }
-                    else if (line == "exit")
+                    else if ((line == "exit") || (line == "leave"))
                     {
                         hostApp.Log(LogType.INF, "Received {0} command", line);
-                        Controller.LeaveMeeting(false);
-                        ShouldExit = true;
+                        UsherBot.LeaveMeeting(false);
+                        shouldExit = true;
                     }
-                    else if (line == "kill")
+                    else if ((line == "kill") || (line == "end"))
                     {
                         hostApp.Log(LogType.INF, "Received {0} command", line);
-                        Controller.LeaveMeeting(true);
+                        UsherBot.LeaveMeeting(true);
                     }
                     else
                     {
@@ -884,20 +887,41 @@ namespace ZoomMeetingBotSDK
             return bots.OrderByDescending(o => o.Item1).Select(x => x.Item2).ToList();
         }
 
+        public static void LeaveMeeting(bool endMeetingForAll = true)
+        {
+            if (leaveMeeting)
+            {
+                hostApp.Log(LogType.WRN, "[UsherBot] LeaveMeeting - Already leaving");
+                return;
+            }
+            leaveMeeting = true;
+
+            hostApp.Log(LogType.WRN, $"[UsherBot] LeaveMeeting endForAll={endMeetingForAll}");
+            endForAll = endMeetingForAll;
+        }
+
         /// <summary>
         /// Leaves the meeting, optionally ending meeting or passing off Host role to another participant.
         /// </summary>
-        public static void LeaveMeeting(bool endForAll = false)
+        private static void ReallyLeaveMeeting()
         {
+            if (leavingMeeting)
+            {
+                hostApp.Log(LogType.WRN, "[UsherBot] ReallyLeaveMeeting - Already leaving");
+                return;
+            }
+
+            leavingMeeting = true;
+
             if (!endForAll)
             {
                 if (!Controller.me.isHost)
                 {
-                    hostApp.Log(LogType.DBG, "BOT LeaveMeeting - I am not host");
+                    hostApp.Log(LogType.DBG, "[UsherBot] ReallyLeaveMeeting - I am not host");
                 }
                 else
                 {
-                    hostApp.Log(LogType.DBG, "BOT LeaveMeeting - I am host; Trying to find someone to pass it to");
+                    hostApp.Log(LogType.DBG, "[UsherBot] ReallyLeaveMeeting - I am host; Trying to find someone to pass it to");
 
                     Controller.Participant altHost = null;
                     foreach (Controller.Participant p in Controller.participants.Values)
@@ -912,26 +936,26 @@ namespace ZoomMeetingBotSDK
 
                     if (altHost == null)
                     {
-                        hostApp.Log(LogType.ERR, "BOT LeaveMeeting - Could not find an alternative host; Ending meeting");
+                        hostApp.Log(LogType.ERR, "[UsherBot] ReallyLeaveMeeting - Could not find an alternative host; Ending meeting");
                         endForAll = true;
                     }
                     else
                     {
-                        hostApp.Log(LogType.INF, $"BOT LeaveMeeting - Passing Host to {altHost}");
+                        hostApp.Log(LogType.INF, $"[UsherBot] ReallyLeaveMeeting - Passing Host to {altHost}");
                         if (Controller.PromoteParticipant(altHost, Controller.ParticipantRole.Host))
                         {
-                            hostApp.Log(LogType.INF, $"BOT LeaveMeeting - Passed Host to {altHost}");
+                            hostApp.Log(LogType.INF, $"[UsherBot] ReallyLeaveMeeting - Passed Host to {altHost}");
                         }
                         else
                         {
-                            hostApp.Log(LogType.ERR, $"BOT LeaveMeeting - Failed to pass Host to {altHost}; Ending meeting");
+                            hostApp.Log(LogType.ERR, $"[UsherBot] ReallyLeaveMeeting - Failed to pass Host to {altHost}; Ending meeting");
                             endForAll = true;
                         }
                     }
                 }
             }
 
-            hostApp.Log(LogType.INF, "BOT LeaveMeeting - Leaving Meeting");
+            hostApp.Log(LogType.INF, "[UsherBot] ReallyLeaveMeeting - Really Leaving Meeting");
             _ = Controller.LeaveMeeting(endForAll);
         }
 
@@ -1021,7 +1045,13 @@ namespace ZoomMeetingBotSDK
 
         private void Controller_OnActionTimerTick(object sender, EventArgs e)
         {
-            if (ShouldExit)
+            if (leaveMeeting)
+            {
+                ReallyLeaveMeeting();
+                return;
+            }
+
+            if (shouldExit)
             {
                 return;
             }
@@ -1069,7 +1099,7 @@ namespace ZoomMeetingBotSDK
 
         private void Controller_OnExit(object sender, EventArgs e)
         {
-            ShouldExit = true;
+            Stop();
         }
 
         private static bool AdmitIfNeeded(Controller.Participant p)
@@ -1244,12 +1274,7 @@ namespace ZoomMeetingBotSDK
             var to = e.to;
             var from = e.from;
             var text = e.text;
-
-            // NOTE: Apparently isPrivate=true if there are only two people in the meeting, even if messages are sent to Everyone
-            // TBD: Verify isPrivate=false if there are > 2 ppl in mtg
-            var isPrivate = e.isPrivate;
-
-            var isToEveryone = Controller.SpecialParticipant.IsEveryone(to);
+            var isToEveryone = e.isToEveryone;
 
             // TBD: All of this parsing is really messy. It could use a re-write!
 
@@ -1259,8 +1284,14 @@ namespace ZoomMeetingBotSDK
                 return;
             }
 
-            Controller.Participant replyTo = null;
+            // Special case when only the bot and one attendee are present
+            // TBD: Folks in the waiting room can throw this out. Really should count # of actual attendees
+            var onlyTwoAttendees = Controller.participants.Count == 2;
 
+            // Consider it private if it's not to everyone or if there are only two people in the meeting
+            var isPrivate = isToEveryone ? onlyTwoAttendees : true;
+
+            Controller.Participant replyTo = null;
             if (isToEveryone)
             {
                 // If there are only two people in the meeting, isPrivate=true and we can assume they are talking to the bot.
@@ -1279,6 +1310,13 @@ namespace ZoomMeetingBotSDK
             {
                 replyTo = from;
                 NotifyTrackers("chat", $"(from {from}) {text}");
+
+                // Currently the SDK only sends events for chats sent to everyone or sent to me, but it's possible that may change in the future.
+                //   We do a sanity check here to make sure we don't respond to messages sent to other participants
+                if (!to.isMe)
+                {
+                    return;
+                }
             }
 
             // ====
@@ -1289,8 +1327,7 @@ namespace ZoomMeetingBotSDK
             if (!text.StartsWith("/"))
             {
                 // If the bot is addressed publically or if there are only two people in the meeting, then reply with TTS
-                // TBD: Should be attending count, not participant count.  Some could be in the waiting room
-                var speak = !isPrivate || (Controller.participants.Count == 2);
+                var speak = isToEveryone || onlyTwoAttendees;
 
                 // We start with a one-time hi.  Various bots may be in different time zones and the good morning/afternoon/evening throws things off
                 var response = OneTimeHi(text, from);
@@ -1367,12 +1404,6 @@ namespace ZoomMeetingBotSDK
             // ====
             // Handle non-priviledged commands
             // ====
-
-            // Drop any commands not addressed directly to me
-            if (!to.isMe)
-            {
-                return;
-            }
 
             // Determine if sender is admin or not
             GoodUsers.TryGetValue(CleanUserName(e.from.name), out bool bAdmin);
@@ -1809,9 +1840,7 @@ namespace ZoomMeetingBotSDK
                     GoodUsers[cleanUserName] = false;
                 }
 
-                var success = Controller.DemoteParticipant(target);
-                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully demoted" : "Failed to demote")} {repr(target.name)}");
-
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.DemoteParticipant(target) ? "Successfully demoted" : "Failed to demote")} {repr(target.name)}");
                 return;
             }
 
@@ -1819,17 +1848,32 @@ namespace ZoomMeetingBotSDK
             {
                 // TBD: Add /force option so that they cannot unmute
 
-                var success = Controller.MuteParticipant(target);
-                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully muted" : "Failed to mute")} {repr(target.name)}");
-
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.MuteParticipant(target) ? "Successfully muted" : "Failed to mute")} {repr(target.name)}");
                 return;
             }
 
             if (sCommand == "unmute")
             {
-                var success = Controller.UnmuteParticipant(target);
-                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully unmuted" : "Failed to unmute")} {repr(target.name)}");
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.UnmuteParticipant(target) ? "Successfully unmuted" : "Failed to unmute")} {repr(target.name)}");
+                return;
+            }
 
+            if ((sCommand == "expel") || (sCommand == "kick"))
+            {
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.ExpelParticipant(target) ? "Successfully expelled" : "Failed to expel")} {repr(target.name)}");
+                return;
+            }
+
+            if ((sCommand == "wait") || (sCommand == "waitroom") || (sCommand == "waitingroom") || (sCommand == "putinwait") || (sCommand == "putinwaiting") || (sCommand == "putinwaitingroom"))
+            {
+                // Remove user from good users so they don't get auto-admitted again
+                var cleanUserName = CleanUserName(target.name);
+                if (GoodUsers.TryGetValue(cleanUserName, out _))
+                {
+                    GoodUsers.Remove(cleanUserName);
+                }
+
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.PutParticipantInWaitingRoom(target) ? "Successfully put" : "Failed to put")} {repr(target.name)} in waiting room");
                 return;
             }
 
@@ -1846,7 +1890,11 @@ namespace ZoomMeetingBotSDK
         {
             lock (_lock_eh)
             {
-                ShouldExit = true;
+                if (shouldExit)
+                {
+                    hostApp.Log(LogType.WRN, "[UsherBot] Stop(): Ignoring duplicate request");
+                    return;
+                }
 
                 if (chatBots != null)
                 {
@@ -1863,14 +1911,20 @@ namespace ZoomMeetingBotSDK
                     }
                 }
 
-                try
-                {
-                    Controller.Stop();
-                }
-                catch (Exception ex)
-                {
-                    hostApp.Log(LogType.ERR, $"Exception stopping controller: {ex}");
-                }
+                LeaveMeeting();
+            }
+
+            // TBD: This is a total hackfest. Need to cleanly end the meeting...
+            Controller.SleepWithDoEvents(5000);
+            shouldExit = true;
+
+            try
+            {
+                Controller.Stop();
+            }
+            catch (Exception ex)
+            {
+                hostApp.Log(LogType.ERR, $"Exception stopping controller: {ex}");
             }
         }
 

@@ -114,7 +114,7 @@ namespace ZoomMeetingBotSDK
             public Participant from;
             public Participant to;
             public string text = null;
-            public bool isPrivate = false;
+            public bool isToEveryone = false;
         }
 
         public static event EventHandler<OnChatMessageReceiveArgs> OnChatMessageReceive = (sender, e) => { };
@@ -335,8 +335,8 @@ namespace ZoomMeetingBotSDK
                 text = chatMsg.GetContent(),
             };
 
-            e.isPrivate = !SpecialParticipant.TryGetValue(e.from.userId, out _);
-            hostApp.Log(LogType.DBG, $"chatMsgNotification from={e.from} to={e.to} private={e.isPrivate} text={repr(e.text)}");
+            e.isToEveryone = SpecialParticipant.TryGetValue(e.to.userId, out _);
+            hostApp.Log(LogType.DBG, $"chatMsgNotification from={e.from} to={e.to} isToEveryone={e.isToEveryone} text={repr(e.text)}");
 
             OnChatMessageReceive(null, e);
         }
@@ -499,6 +499,8 @@ namespace ZoomMeetingBotSDK
 
         public static void Zoom_OnLowOrRaiseHandStatusChanged(bool bLow, uint userId)
         {
+            // NOTE: This does not get called when one of the hosts or co-hosts lowers ALL hands
+
             hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} id={userId} low={bLow}");
 
             var list = new List<Participant>();
@@ -662,7 +664,7 @@ namespace ZoomMeetingBotSDK
             videoController.Add_CB_onSpotlightVideoChangeNotification(Zoom_OnSpotlightVideoChangeNotification);
             shareController.Add_CB_onLockShareStatus(Zoom_OnLockShareStatus);
             shareController.Add_CB_onShareContentNotification(Zoom_OnShareContentNotification);
-            shareController.Add_CB_onSharingStatus(Zoom_OnSharingStatus);            
+            shareController.Add_CB_onSharingStatus(Zoom_OnSharingStatus);
             waitController.Add_CB_onWatingRoomUserJoin(Zoom_OnWatingRoomUserJoin);
             waitController.Add_CB_onWatingRoomUserLeft(Zoom_OnWatingRoomUserLeft);
             chatController.Add_CB_onChatMsgNotifcation(Zoom_OnChatMsgNotification);
@@ -679,6 +681,42 @@ namespace ZoomMeetingBotSDK
             uiController.Add_CB_onParticipantListBtnClicked(Zoom_OnParticipantListBtnClicked);
             uiController.Add_CB_onStartShareBtnClicked(Zoom_OnStartShareBtnClicked);
             uiController.Add_CB_onZoomInviteDialogFailed(Zoom_OnZoomInviteDialogFailed);
+        }
+
+        private static void UnregisterCallBacks()
+        {
+            mtgService.Remove_CB_onMeetingSecureKeyNotification(Zoom_OnMeetingSecureKeyNotification);
+            mtgService.Remove_CB_onMeetingStatisticsWarningNotification(Zoom_OnMeetingStatisticsWarningNotification);
+            mtgService.Remove_CB_onMeetingStatusChanged(Zoom_OnMeetingStatusChanged);
+            participantController.Remove_CB_onHostChangeNotification(Zoom_OnHostChangeNotification);
+            participantController.Remove_CB_onCoHostChangeNotification(Zoom_OnCoHostChangeNotification);
+            participantController.Remove_CB_onLowOrRaiseHandStatusChanged(Zoom_OnLowOrRaiseHandStatusChanged);
+            participantController.Remove_CB_onUserJoin(Zoom_OnUserJoin);
+            participantController.Remove_CB_onUserLeft(Zoom_OnUserLeft);
+            participantController.Remove_CB_onUserNameChanged(Zoom_OnUserNameChanged);
+            audioController.Remove_CB_onUserAudioStatusChange(Zoom_OnUserAudioStatusChange);
+            audioController.Remove_CB_onUserActiveAudioChange(Zoom_OnUserActiveAudioChange);
+            videoController.Remove_CB_onUserVideoStatusChange(Zoom_OnUserVideoStatusChange);
+            videoController.Remove_CB_onSpotlightVideoChangeNotification(Zoom_OnSpotlightVideoChangeNotification);
+            shareController.Remove_CB_onLockShareStatus(Zoom_OnLockShareStatus);
+            shareController.Remove_CB_onShareContentNotification(Zoom_OnShareContentNotification);
+            shareController.Remove_CB_onSharingStatus(Zoom_OnSharingStatus);
+            waitController.Remove_CB_onWatingRoomUserJoin(Zoom_OnWatingRoomUserJoin);
+            waitController.Remove_CB_onWatingRoomUserLeft(Zoom_OnWatingRoomUserLeft);
+            chatController.Remove_CB_onChatMsgNotifcation(Zoom_OnChatMsgNotification);
+            chatController.Remove_CB_onChatStatusChangedNotification(Zoom_OnChatStatusChangedNotification);
+            uiController.Remove_CB_onEndMeetingBtnClicked(Zoom_OnEndMeetingBtnClicked);
+
+            /*
+            unsafe
+            {
+                uiController.Remove_CB_onInviteBtnClicked(Zoom_OnInviteBtnClicked);
+            }
+            */
+
+            uiController.Remove_CB_onParticipantListBtnClicked(Zoom_OnParticipantListBtnClicked);
+            uiController.Remove_CB_onStartShareBtnClicked(Zoom_OnStartShareBtnClicked);
+            uiController.Remove_CB_onZoomInviteDialogFailed(Zoom_OnZoomInviteDialogFailed);
         }
 
         /* ================ MAIN CODE ================ */
@@ -1042,6 +1080,36 @@ namespace ZoomMeetingBotSDK
             hostApp.Log(LogType.INF, "Controller start successful");
         }
 
+        /// <summary>
+        /// Processes application events for the given number of milliseconds using the given polling interval.  This is like the native
+        /// Thread.Sleep() but it allows background tasks to execute during the sleep time.
+        /// </summary>
+        public static void SleepWithDoEvents(int millisecondsTimeout, int millisecondsPollingInterval = 100)
+        {
+            if (millisecondsTimeout < 0)
+            {
+                throw new ArgumentOutOfRangeException("millisecondsTimeout must be >= 0");
+            }
+
+            if (millisecondsPollingInterval < 0)
+            {
+                throw new ArgumentOutOfRangeException("millisecondsPollingInterval must be >= 0");
+            }
+
+            var nowDT = DateTime.UtcNow;
+            var timeoutDT = nowDT.AddMilliseconds(millisecondsTimeout);
+            while (nowDT <= timeoutDT)
+            {
+                Application.DoEvents();
+                if (millisecondsPollingInterval > 0)
+                {
+                    Thread.Sleep(millisecondsPollingInterval);
+                }
+
+                nowDT = DateTime.UtcNow;
+            }
+        }
+
         public static void Stop()
         {
             ShouldExit = true;
@@ -1300,6 +1368,44 @@ namespace ZoomMeetingBotSDK
         }
 
         [MethodImplAttribute(MethodImplOptions.NoInlining)]
+        public static bool ExpelParticipant(Participant p)
+        {
+            try
+            {
+                var sdkErr = participantController.ExpelUser(p.userId);
+                if (sdkErr != SDKError.SDKERR_SUCCESS)
+                {
+                    throw new Exception(sdkErr.ToString());
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                hostApp.Log(LogType.ERR, $"{new StackFrame(1).GetMethod().Name} Failed to expel {p}: {ex}");
+            }
+            return false;
+        }
+
+        [MethodImplAttribute(MethodImplOptions.NoInlining)]
+        public static bool PutParticipantInWaitingRoom(Participant p)
+        {
+            try
+            {
+                var sdkErr = waitController.PutInWaitingRoom(p.userId);
+                if (sdkErr != SDKError.SDKERR_SUCCESS)
+                {
+                    throw new Exception(sdkErr.ToString());
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                hostApp.Log(LogType.ERR, $"{new StackFrame(1).GetMethod().Name} Failed to put {p} in waiting room: {ex}");
+            }
+            return false;
+        }
+
+        [MethodImplAttribute(MethodImplOptions.NoInlining)]
         public static bool SetMeetingTopic(string newTopic)
         {
             try
@@ -1331,12 +1437,14 @@ namespace ZoomMeetingBotSDK
                         throw new Exception(sdkErr.ToString());
                     }
                 }
+
                 return true;
             }
             catch (Exception ex)
             {
                 hostApp.Log(LogType.ERR, $"{new StackFrame(1).GetMethod().Name} Failed to leave meeting: {ex}");
             }
+
             return false;
         }
 

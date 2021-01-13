@@ -211,7 +211,7 @@ namespace ZoomMeetingBotSDK
                         continue;
                     }
 
-                    if (arg_l.StartsWith("/debug:") || arg_l.StartsWith("/citadel:") || (arg_l == "/exit") || (arg_l == "/kill") || arg_l.StartsWith("/pause:"))
+                    if (arg_l.StartsWith("/debug:") || arg_l.StartsWith("/citadel:") || (arg_l == "/exit") || (arg_l == "/leave") || (arg_l == "/kill") || (arg_l == "/end") || arg_l.StartsWith("/pause:"))
                     {
                         commands.Add(arg_l.Substring(1));
                     }
@@ -339,10 +339,19 @@ namespace ZoomMeetingBotSDK
                                     UsherBot.SetMode("pause", paused);
                                 }
                             }
+                            else if (ch == 'k')
+                            {
+                                hostApp.Log(LogType.INF, "[Console] Kill");
+
+                                UsherBot.LeaveMeeting(true);
+
+                                break;
+                            }
                             else if (ch == 'q')
                             {
                                 hostApp.Log(LogType.INF, "[Console] Quit");
 
+                                UsherBot.LeaveMeeting(false);
                                 usherBot.Stop();
 
                                 break;
@@ -351,10 +360,10 @@ namespace ZoomMeetingBotSDK
                     }
                 });
 
-            while (!UsherBot.ShouldExit)
+            while (!UsherBot.shouldExit)
             {
                 Application.DoEvents();
-                Thread.Sleep(10);
+                Thread.Sleep(250);
             }
 
             hostApp.Log(LogType.INF, "[Program] Cleaning Up");
