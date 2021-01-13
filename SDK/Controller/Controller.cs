@@ -1031,7 +1031,7 @@ namespace ZoomMeetingBotSDK
                         var execTimeInMS = DateTime.UtcNow.Subtract(nowDT).TotalMilliseconds;
                         if (execTimeInMS > rateInMS)
                         {
-                            hostApp.Log(LogType.WRN, $"OnActionTimerTick lagging {execTimeInMS - rateInMS}ms");
+                            hostApp.Log(LogType.WRN, $"OnActionTimerTick lagging {(int)(execTimeInMS - rateInMS)}ms");
                         }
                     }
                 }

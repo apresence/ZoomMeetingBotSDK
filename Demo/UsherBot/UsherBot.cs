@@ -391,58 +391,29 @@ namespace ZoomMeetingBotSDK
 
                 switch (p.status)
                 {
-                    case Controller.ParticipantStatus.Waiting:
-                        numWaiting += 1;
-                        break;
                     case Controller.ParticipantStatus.Attending:
-                        numAttending += 1;
+                        // Do attending actions
+
+                        numAttending++;
+
+                        _ = PromoteIfNeeded(p);
+
+                        continue;
+                    case Controller.ParticipantStatus.Waiting:
+                        // Fall through to do waiting actions below
+
+                        if (AdmitIfNeeded(p))
+                        {
+                            numAttending++;
+                        }
+                        else
+                        {
+                            numWaiting++;
+                        }
+
                         continue;
                     default:
                         continue;
-                }
-
-                // TBD: Do as sorted admit queue?
-                if (bAdmitOthers)
-                {
-                    // Admitting an unknown user
-
-                    bool bAdmit = false;
-
-                    DateTime dtWhenToAdmit = p.dtWaiting.AddSeconds(cfg.UnknownParticipantWaitSecs);
-                    if (dtWhenToAdmit < dtNow)
-                    {
-                        // Too early to admit this participant
-                        continue;
-                    }
-
-                    dtWhenToAdmit = dtLastAdmission.AddSeconds(cfg.UnknownParticipantWaitSecs);
-                    bAdmit = dtNow >= dtWhenToAdmit;
-
-                    string waitMsg = $"BOT Admit {p} : Unknown participant waiting room time reached";
-                    if (bAdmit)
-                    {
-                        waitMsg += " : Admitting";
-                    }
-
-                    // Make sure we don't display the message more than once
-                    if (!HsParticipantMessages.Contains(waitMsg))
-                    {
-                        hostApp.Log(LogType.INF, waitMsg);
-                        HsParticipantMessages.Add(waitMsg);
-                    }
-
-                    if (bAdmit && Controller.AdmitParticipant(p))
-                    {
-                        // User was successfully admitted; Remove the message from the queue
-                        HsParticipantMessages.Remove(waitMsg);
-
-                        // Caculate next admission time
-                        dtLastAdmission = dtNow;
-
-                        // Adjust counts
-                        numWaiting -= 1;
-                        numAttending += 1;
-                    }
                 }
             }
 
@@ -479,14 +450,12 @@ namespace ZoomMeetingBotSDK
             }
 
             // Greet the first person to join the meeting, but only if we started Zoom
-            if ((!Controller.ZoomAlreadyRunning) && (FirstParticipantGreeted == null))
+            if ((!Controller.ZoomAlreadyRunning) && (FirstParticipantGreeted == null) && (numAttending > 0))
             {
-                //var plist = Controller.participants.ToList();
-
-                // Looking for a participant that is not me, using computer audio, audio is connected, and is a known good user
+                // Looking for a participant that is not me, is using computer audio, and is a known good user
                 var idx = participants.FindIndex(x => (
                     (!x.isMe) &&
-                    (!x.isAudioMuted) &&
+                    (x.status == Controller.ParticipantStatus.Attending) &&
                     (x.audioDevice == Controller.ControllerAudioType.AUDIOTYPE_VOIP) &&
                     GoodUsers.ContainsKey(CleanUserName(x.name))
                 ));
@@ -1099,6 +1068,107 @@ namespace ZoomMeetingBotSDK
             ShouldExit = true;
         }
 
+        private static bool AdmitIfNeeded(Controller.Participant p)
+        {
+            var bAdmitKnown = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitKnown) != 0;
+            var bAdmitOthers = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitOthers) != 0;
+
+            if (p.isMe || (!bAdmitKnown && !bAdmitOthers))
+            {
+                // Nothing to do
+                return false;
+            }
+
+            var sCleanName = CleanUserName(p.name);
+            if (GoodUsers.ContainsKey(sCleanName) && bAdmitKnown)
+            {
+                hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", repr(p.name));
+                return Controller.AdmitParticipant(p);
+            }
+
+            if (!bAdmitOthers)
+            {
+                // Nothing to do
+                return false;
+            }
+
+            // Admitting an unknown user
+
+            bool bAdmit = false;
+
+            DateTime dtNow = DateTime.UtcNow;
+            DateTime dtWhenToAdmit = p.dtWaiting.AddSeconds(cfg.UnknownParticipantWaitSecs);
+            if (dtWhenToAdmit < dtNow)
+            {
+                // Too early to admit this participant
+                return false;
+            }
+
+            dtWhenToAdmit = dtLastAdmission.AddSeconds(cfg.UnknownParticipantWaitSecs);
+            bAdmit = dtNow >= dtWhenToAdmit;
+
+            string waitMsg = $"BOT Admit {p} : Unknown participant waiting room time reached";
+            if (bAdmit)
+            {
+                waitMsg += " : Admitting";
+            }
+
+            // Make sure we don't display the message more than once
+            if (!HsParticipantMessages.Contains(waitMsg))
+            {
+                hostApp.Log(LogType.INF, waitMsg);
+                HsParticipantMessages.Add(waitMsg);
+            }
+
+            if (bAdmit && Controller.AdmitParticipant(p))
+            {
+                // User was successfully admitted; Remove the message from the queue
+                HsParticipantMessages.Remove(waitMsg);
+
+                // Caculate next admission time
+                dtLastAdmission = dtNow;
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool PromoteIfNeeded(Controller.Participant p)
+        {
+            // Handle automatically co-hosting folks here if needed
+
+            if ((p.isMe) || (p.isCoHost))
+            {
+                // I can't promote myself, and I can't co-host someone who is already co-hosted
+                return false;
+            }
+
+            if ((cfg.BotAutomationFlags & BotAutomationFlag.CoHostKnown) == 0)
+            {
+                // Nothing to do
+                return false;
+            }
+
+            string cleanName = CleanUserName(p.name);
+            GoodUsers.TryGetValue(cleanName, out bool bUserShouldBeCoHost);
+
+            if (!bUserShouldBeCoHost)
+            {
+                // Nothing to do
+                return false;
+            }
+
+            if ((!Controller.me.isHost) && (!Controller.me.isCoHost))
+            {
+                hostApp.Log(LogType.WRN, $"BOT Participant {p} should be Co-Host, but I am not Co-Host or Host");
+                return false;
+            }
+
+            hostApp.Log(LogType.INF, $"BOT Promoting {p} to Co-host");
+            return Controller.PromoteParticipant(p, Controller.ParticipantRole.CoHost);
+        }
+
         private void Controller_OnParticipantJoinMeeting(object sender, Controller.OnParticipantJoinMeetingArgs e)
         {
             var p = e.participant;
@@ -1109,32 +1179,7 @@ namespace ZoomMeetingBotSDK
                 SendTopic(p, false);
             }
 
-            // Handle automatically co-hosting folks here if needed
-            // TBD: Repeat this in timer handler too in case I become host later
-
-            if ((cfg.BotAutomationFlags & BotAutomationFlag.CoHostKnown) == 0)
-            {
-                // Nothing to do
-                return;
-            }
-
-            string cleanName = CleanUserName(p.name);
-            GoodUsers.TryGetValue(cleanName, out bool bUserShouldBeCoHost);
-
-            if (!bUserShouldBeCoHost)
-            {
-                // Nothing to do
-                return;
-            }
-
-            if ((!Controller.me.isHost) && (!Controller.me.isCoHost))
-            {
-                hostApp.Log(LogType.WRN, $"BOT Participant {p} should be Co-Host, but I am not Co-Host or Host");
-                return;
-            }
-
-            hostApp.Log(LogType.INF, $"BOT Promoting {p} to Co-host");
-            _ = Controller.PromoteParticipant(p, Controller.ParticipantRole.CoHost);
+            PromoteIfNeeded(p);
         }
 
         private void Controller_OnParticipantLeaveMeeting(object sender, Controller.OnParticipantLeaveMeetingArgs e)
@@ -1144,25 +1189,7 @@ namespace ZoomMeetingBotSDK
 
         private void Controller_OnParticipantJoinWaitingRoom(object sender, Controller.OnParticipantJoinWaitingRoomArgs e)
         {
-            var bAdmitKnown = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitKnown) != 0;
-            //var bAdmitOthers = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitOthers) != 0;
-
-            //if (!(bAdmitKnown || bAdmitOthers))
-            if (!bAdmitKnown)
-            {
-                return; // Nothing to do
-            }
-
-            var p = e.participant;
-            var sCleanName = CleanUserName(p.name);
-            if (GoodUsers.ContainsKey(sCleanName))
-            {
-                if (bAdmitKnown)
-                {
-                    hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", repr(p.name));
-                    _ = Controller.AdmitParticipant(p);
-                }
-            }
+            AdmitIfNeeded(e.participant);
         }
 
         private void Controller_OnParticipantLeaveWaitingRoom(object sender, Controller.OnParticipantLeaveWaitingRoomArgs e)
@@ -1691,6 +1718,14 @@ namespace ZoomMeetingBotSDK
                     return;
                 }
 
+                // If the target is in the good users list as an admin, go ahead and clear the admin flag them so we don't promote them again automatically
+                // NOTE: This will be foiled if the good users file is updated and reloaded; But that isn't likely to happen ...
+                var cleanUserName = CleanUserName(target.name);
+                if (GoodUsers.TryGetValue(cleanUserName, out bool bIsAdmin) && bIsAdmin)
+                {
+                    GoodUsers[cleanUserName] = false;
+                }
+
                 var success = Controller.DemoteParticipant(target);
                 _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully demoted" : "Failed to demote")} {repr(target.name)}");
 
@@ -1699,6 +1734,8 @@ namespace ZoomMeetingBotSDK
 
             if (sCommand == "mute")
             {
+                // TBD: Add /force option so that they cannot unmute
+
                 var success = Controller.MuteParticipant(target);
                 _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully muted" : "Failed to mute")} {repr(target.name)}");
 

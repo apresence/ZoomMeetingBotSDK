@@ -115,7 +115,6 @@ namespace ZoomMeetingBotSDK
     using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
-    using System.Windows.Automation;
     using System.Windows.Forms;
     using static Utils;
 
@@ -329,22 +328,20 @@ namespace ZoomMeetingBotSDK
                             {
                                 if (paused)
                                 {
-                                    Console.WriteLine("CONSOLE : === UNPAUSE ===");
-
                                     paused = false;
+                                    hostApp.Log(LogType.INF, "[Console] Pause");
                                     UsherBot.SetMode("pause", paused);
                                 }
                                 else
                                 {
-                                    Console.WriteLine("CONSOLE : === PAUSE ===");
-
                                     paused = true;
+                                    hostApp.Log(LogType.INF, "[Console] Unpause");
                                     UsherBot.SetMode("pause", paused);
                                 }
                             }
                             else if (ch == 'q')
                             {
-                                Console.WriteLine("CONSOLE : === QUIT ===");
+                                hostApp.Log(LogType.INF, "[Console] Quit");
 
                                 usherBot.Stop();
 
