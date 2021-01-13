@@ -26,6 +26,7 @@ namespace ZoomMeetingBotSDK
         private static volatile bool leaveMeeting = false;
         private static volatile bool leavingMeeting = false;
         private static volatile bool endForAll = true;
+        private static string speaker = null;
 
         private static IHostApp hostApp;
 
@@ -201,7 +202,7 @@ namespace ZoomMeetingBotSDK
 
             if (sName == "lockdown")
             {
-                // In lockdown mode, don't automatically admit or cohost anybody
+                // In lockdown mode, lock the meeting and don't admit ayone
                 var botLockdownFlags = BotAutomationFlag.AdmitOthers | BotAutomationFlag.AdmitKnown | BotAutomationFlag.CoHostKnown;
                 bool bLockdownMode = (cfg.BotAutomationFlags & botLockdownFlags) == 0;
                 if (bLockdownMode == bNewState)
@@ -217,7 +218,11 @@ namespace ZoomMeetingBotSDK
                 {
                     cfg.BotAutomationFlags |= botLockdownFlags;
                 }
-                hostApp.Log(LogType.INF, "Lockdown mode {0}", bNewState ? "on" : "off");
+
+                hostApp.Log(LogType.INF, $"[UsherBot] {(bNewState ? "Locking" : "Unlocking")} meeting");
+                _ = Controller.LockMeeting(bNewState);
+
+                hostApp.Log(LogType.INF, $"Lockdown mode {(bNewState ? "on" : "off")}");
                 return true;
             }
 
@@ -730,91 +735,62 @@ namespace ZoomMeetingBotSDK
             return response;
         }
 
-        private static void SetSpeaker(Controller.Participant speaker, Controller.Participant from)
+        private static void SetSpeaker(Controller.Participant newSpeaker, Controller.Participant from)
         {
-            _ = Controller.SendChatMessage(from, "Speaker mode is not yet implemented");
-
-            /*
-            if (p == null)
+            if (newSpeaker == null)
             {
-                if (ZoomMeetingBotSDK.GetMeetingOption(ZoomMeetingBotSDK.MeetingOption.AllowParticipantsToUnmuteThemselves) == System.Windows.Automation.ToggleState.On)
+                if (speaker == null)
                 {
-                    if (from != null)
-                    {
-                        ZoomMeetingBotSDK.Controller.SendChatMessage(from, "Speaker mode is already off");
-                    }
-
+                    _ = Controller.SendChatMessage(from, "Speaker mode is already off");
                     return;
                 }
 
-                ZoomMeetingBotSDK.SetMeetingOption(ZoomMeetingBotSDK.MeetingOption.AllowParticipantsToUnmuteThemselves, System.Windows.Automation.ToggleState.On);
-                if (from != null)
-                {
-                    ZoomMeetingBotSDK.Controller.SendChatMessage(from, "Speaker mode turned off");
-                }
+                _ = Controller.SendChatMessage(from, "Turning speaker mode off");
 
+                hostApp.Log(LogType.INF, "Allowing participants to unmute themselves");
+                _ = Controller.SetAllowParticipantsToUnmuteSelf(true);
                 return;
             }
 
-            if (from != null)
+            if (newSpeaker.name == speaker)
             {
-                ZoomMeetingBotSDK.Controller.SendChatMessage(from, $"Setting speaker to {p.name}");
+                _ = Controller.SendChatMessage(from, $"Speaker is already {newSpeaker}");
+                return;
             }
 
-            ZoomMeetingBotSDK.SetMeetingOption(ZoomMeetingBotSDK.MeetingOption.MuteParticipantsUponEntry, System.Windows.Automation.ToggleState.On);
-            // - Set by MuteAll dialog - ZoomMeetingBotSDK.SetMeetingOption(ZoomMeetingBotSDK.MeetingOption.AllowParticipantsToUnmuteThemselves, System.Windows.Automation.ToggleState.Off);
+            _ = Controller.SendChatMessage(from, "Turning speaker mode on");
 
-            /-*
-            _ = ZoomMeetingBotSDK.MuteAll(false);
+            hostApp.Log(LogType.INF, "Disallowing participants to unmute themselves");
+            _ = Controller.SetAllowParticipantsToUnmuteSelf(false);
 
-            // MuteAll does not mute Host or Co-Host participants, so do that now
-            foreach (ZoomMeetingBotSDK.Participant participant in ZoomMeetingBotSDK.participants.Values)
+            // Unmute speaker and mute everyone else
+            foreach (var p in Controller.participants.Values)
             {
-                // Skip past folks who are not Host or Co-Host
-                if (participant.role == ZoomMeetingBotSDK.ParticipantRole.None)
+                // Skip over me, host & cohost
+                if (p.isMe || p.isHost || p.isCoHost)
                 {
                     continue;
                 }
 
-                // Skip past folks that are not unmuted
-                if (participant.audioStatus != ZoomMeetingBotSDK.ParticipantAudioStatus.Unmuted)
+                if (p.userId == newSpeaker.userId)
                 {
-                    continue;
-                }
-
-                ZoomMeetingBotSDK.MuteParticipant(p);
-            }
-
-            ZoomMeetingBotSDK.UnmuteParticipant(p);
-            *-/
-
-            // Mute everyone who is not muted (unless they are host or co-host)
-            foreach (ZoomMeetingBotSDK.Participant participant in ZoomMeetingBotSDK.participants.Values)
-            {
-                if (participant.name == p.name)
-                {
-                    // This is the speaker, make sure he/she is unmuted
-                    if (participant.audioStatus == ZoomMeetingBotSDK.ParticipantAudioStatus.Muted)
+                    if (p.isAudioMuted)
                     {
-                        ZoomMeetingBotSDK.UnmuteParticipant(participant);
+                        hostApp.Log(LogType.INF, $"Unmuting {p}");
+                        Controller.UnmuteParticipant(p);
                     }
-
-                    continue;
                 }
-
-                // Skip past folks who are Host or Co-Host
-                if (participant.role != ZoomMeetingBotSDK.ParticipantRole.None)
+                else
                 {
-                    continue;
-                }
-
-                // Mute anyone who is off mute
-                if (participant.audioStatus == ZoomMeetingBotSDK.ParticipantAudioStatus.Unmuted)
-                {
-                    ZoomMeetingBotSDK.MuteParticipant(p);
+                    if (!p.isAudioMuted)
+                    {
+                        hostApp.Log(LogType.INF, $"Muting {p}");
+                        Controller.MuteParticipant(p);
+                    }
                 }
             }
-            */
+
+            _ = Controller.SendChatMessage(from, $"Speaker set to {newSpeaker}");
         }
 
         private static List<IChatBot> chatBots = null;
@@ -1564,8 +1540,13 @@ namespace ZoomMeetingBotSDK
                 }
             }
 
-            if ((sCommand == "citadel") || (sCommand == "lockdown") || (sCommand == "passive"))
+            if ((sCommand == "citadel") || (sCommand == "lockdown") || (sCommand == "passive") || (sCommand == "lock"))
             {
+                if (sCommand == "lock")
+                {
+                    sCommand = "lockdown";
+                }
+
                 string sNewMode = sTarget.ToLower().Trim();
                 bool bNewMode;
 

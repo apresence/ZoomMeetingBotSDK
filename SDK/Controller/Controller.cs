@@ -1448,6 +1448,54 @@ namespace ZoomMeetingBotSDK
             return false;
         }
 
+        [MethodImplAttribute(MethodImplOptions.NoInlining)]
+        public static bool LockMeeting(bool enableLock)
+        {
+            try
+            {
+                if (mtgService != null)
+                {
+                    var sdkErr = enableLock ? mtgService.LockMeeting() : mtgService.UnlockMeeting();
+                    if (sdkErr != SDKError.SDKERR_SUCCESS)
+                    {
+                        throw new Exception(sdkErr.ToString());
+                    }
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                hostApp.Log(LogType.ERR, $"{new StackFrame(1).GetMethod().Name} Failed to {(enableLock ? "lock" : "unlock")} meeting: {ex}");
+            }
+
+            return false;
+        }
+
+        [MethodImplAttribute(MethodImplOptions.NoInlining)]
+        public static bool SetAllowParticipantsToUnmuteSelf(bool allow)
+        {
+            try
+            {
+                if (mtgService != null)
+                {
+                    var sdkErr = participantController.AllowParticipantsToUnmuteSelf(allow);
+                    if (sdkErr != SDKError.SDKERR_SUCCESS)
+                    {
+                        throw new Exception(sdkErr.ToString());
+                    }
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                hostApp.Log(LogType.ERR, $"{new StackFrame(1).GetMethod().Name} Failed to set allowParticipantsToUnmuteSelf={allow}: {ex}");
+            }
+
+            return false;
+        }
+
         private static bool loggedLayoutWindowsWarning = false;
         public static void LayoutWindows()
         {
