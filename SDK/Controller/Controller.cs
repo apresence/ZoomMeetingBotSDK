@@ -147,6 +147,21 @@ namespace ZoomMeetingBotSDK
 
         public static event EventHandler<OnParticipantLeaveMeetingArgs> OnParticipantLeaveMeeting = (sender, e) => { };
 
+        public class OnParticipantActiveAudioChangeArgs : EventArgs
+        {
+            public List<Participant> activeAudioParticipants;
+        }
+
+        public static event EventHandler<OnParticipantActiveAudioChangeArgs> OnParticipantActiveAudioChange = (sender, e) => { };
+
+        public class OnParticipantRaisedHandsChangeArgs : EventArgs
+        {
+            public List<Participant> raisedHandParticipants;
+        }
+
+        public static event EventHandler<OnParticipantRaisedHandsChangeArgs> OnParticipantRaisedHandsChange = (sender, e) => { };
+
+
         /* ===== Callbacks ===== */
 
         public static void Zoom_OnAuthenticationReturn(AuthResult ret)
@@ -201,11 +216,11 @@ namespace ZoomMeetingBotSDK
                 audioController = mtgService.GetMeetingAudioController();
                 videoController = mtgService.GetMeetingVideoController();
                 shareController = mtgService.GetMeetingShareController();
-                waitController = mtgService.GetMeetingWaitingRoomController();                
+                waitController = mtgService.GetMeetingWaitingRoomController();
                 chatController = mtgService.GetMeetingChatController();
                 uiController = mtgService.GetUIController();
 
-                // TBD: Implement all controllers, at least for logging events                
+                // TBD: Implement all controllers, at least for logging events
 
                 RegisterCallBacks();
 
@@ -258,7 +273,7 @@ namespace ZoomMeetingBotSDK
 
         public static void Zoom_OnMeetingStatusChanged(MeetingStatus status, int iResult)
         {
-            hostApp.Log(LogType.DBG, $"meetingstatus {status}; rc={iResult}");
+            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} {status}; rc={iResult}");
 
             switch (status)
             {
@@ -276,7 +291,7 @@ namespace ZoomMeetingBotSDK
                     StartingMeeting = false;
                     break;
                 case MeetingStatus.MEETING_STATUS_ENDED:
-                    OnExit(null, null); 
+                    OnExit(null, null);
                     break;
             }
         }
@@ -482,22 +497,53 @@ namespace ZoomMeetingBotSDK
             hostApp.Log(LogType.INF, $"Participant {p} left the waiting room");
         }
 
-        public static void Zoom_OnLowOrRaiseHandStatusChanged(bool bLow, uint userid)
+        public static void Zoom_OnLowOrRaiseHandStatusChanged(bool bLow, uint userId)
         {
-            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} id={userid} low={bLow}");
+            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} id={userId} low={bLow}");
 
-            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} participants ENTER");
-            lock (participants)
+            var list = new List<Participant>();
+
+            lock (raisedHands)
             {
-                if (!GetParticipantById(userid, out Participant p))
+                var hasBeenRaised = !bLow;
+                var wasRaisedBefore = raisedHands.Contains(userId);
+
+                if (hasBeenRaised == wasRaisedBefore)
                 {
-                    hostApp.Log(LogType.WRN, $"Got onLowOrRaiseHand event for non-existant userId {userid}");
+                    // No change
                     return;
                 }
 
-                p.isRaiseHand = !bLow;
+                if (hasBeenRaised)
+                {
+                    if (!GetParticipantById(userId, out Participant p))
+                    {
+                        // Ignore event if we don't have the participant in our participant list
+                        return;
+                    }
+                    raisedHands.Add(userId);
+                }
+                else
+                {
+                    raisedHands.Remove(userId);
+                }
+
+                foreach (uint x in raisedHands)
+                {
+                    if (GetParticipantById(x, out Participant p))
+                    {
+                        list.Add(p);
+                    }
+                }
             }
-            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} participants EXIT");
+
+            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} list: {((list.Count == 0) ? "None" : list.ToDelimString())}");
+
+            // This list is maintained in the order the hands were raised
+            OnParticipantRaisedHandsChange(null, new OnParticipantRaisedHandsChangeArgs()
+            {
+                raisedHandParticipants = list,
+            });
         }
 
         /// <summary>
@@ -511,26 +557,35 @@ namespace ZoomMeetingBotSDK
 
             var currentActiveAudio = lstActiveAudio == null ? new HashSet<uint>() : lstActiveAudio.ToHashSet<uint>();
 
-            if (currentActiveAudio.SetEquals(activeAudio))
-            {
-                // List hasn't changed
-                return;
-            }
+            var list = new List<Participant>();
 
-            activeAudio = currentActiveAudio;
-            var list = new List<string>();
-            foreach (uint userId in activeAudio)
+            lock (activeAudio)
             {
-                if (GetParticipantById(userId, out Participant p))
+                if (currentActiveAudio.SetEquals(activeAudio))
                 {
-                    list.Add(p.ToString());
+                    // List hasn't changed
+                    return;
+                }
+
+                activeAudio = currentActiveAudio;
+                foreach (uint userId in activeAudio)
+                {
+                    if (GetParticipantById(userId, out Participant p))
+                    {
+                        list.Add(p);
+                    }
                 }
             }
 
             // Sort by name so it's easier to eyeball changes in the logs
-            list.Sort();
+            list.Sort(delegate (Participant p1, Participant p2) { return p1.ToString().CompareTo(p2.ToString()); });
 
-            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} list: {((list.Count == 0) ? "None" : string.Join(", ", list))}");
+            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} list: {((list.Count == 0) ? "None" : list.ToDelimString())}");
+
+            OnParticipantActiveAudioChange(null, new OnParticipantActiveAudioChangeArgs()
+            {
+                activeAudioParticipants = list,
+            });
         }
 
         public static void Zoom_OnSpotlightVideoChangeNotification(bool bSpotlight, uint userid)
@@ -892,9 +947,15 @@ namespace ZoomMeetingBotSDK
 
         public static Dictionary<uint, Participant> participants = new Dictionary<uint, Participant>();
         public static HashSet<uint> activeAudio = new HashSet<uint>();
+        public static List<uint> raisedHands = new List<uint>();
 
         // Special Participants
         public static Participant me = null;
+
+        /// <summary>
+        /// Did we join a meeting in progress, or start the meeting?
+        /// </summary>
+        public static bool ZoomAlreadyRunning = false;
 
         public static void Init(IHostApp app)
         {
@@ -932,6 +993,24 @@ namespace ZoomMeetingBotSDK
                     Application.DoEvents();
                     Thread.Sleep(250);
                 }
+
+                lock (participants)
+                {
+                    // Some control bots need to know if we started the meeting or joined a meeting already in progress.
+                    //   TBD: I don't immediately see a way to access this info via the API, but if we're the only participant
+                    //   attending the meeting (vs in the waiting room), then it's probably safe to assume we started it.
+                    int numAttending = 0;
+                    foreach (var p in participants.Values)
+                    {
+                        if (p.status == ParticipantStatus.Attending)
+                        {
+                            numAttending++;
+                        }
+                    }
+
+                    ZoomAlreadyRunning = numAttending > 1;
+                }
+
                 StartCompleteEvent.Set();
 
                 var nextActionDT = DateTime.MinValue;

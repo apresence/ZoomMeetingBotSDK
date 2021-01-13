@@ -30,5 +30,13 @@
 
             return enumerable.ElementAt(index);
         }
+
+        /// <summary>
+        /// Applies ToString() to all elements in "enumerable", delimited by "delim", and returns the resulted string.
+        /// </summary>
+        public static string ToDelimString<T>(this IEnumerable<T> enumerable, string delim = ", ")
+        {
+            return enumerable.Select(x => x.ToString()).Aggregate((a, b) => a + delim + b);
+        }
     }
 }

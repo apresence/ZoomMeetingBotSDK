@@ -163,7 +163,7 @@
 
         ~ChatBot()
         {
-            ((IChatBot)this).Stop();
+            //((IChatBot)this).Stop();
         }
     }
 }

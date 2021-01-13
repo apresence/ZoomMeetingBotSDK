@@ -479,9 +479,7 @@ namespace ZoomMeetingBotSDK
             }
 
             // Greet the first person to join the meeting, but only if we started Zoom
-            //if ((!Controller.ZoomAlreadyRunning) && (FirstParticipantGreeted == null))
-            // TBD: Figure out how to replicate the zoom meeting already running logic
-            if (FirstParticipantGreeted == null)
+            if ((!Controller.ZoomAlreadyRunning) && (FirstParticipantGreeted == null))
             {
                 //var plist = Controller.participants.ToList();
 
@@ -1023,6 +1021,8 @@ namespace ZoomMeetingBotSDK
             Controller.OnParticipantLeaveWaitingRoom += Controller_OnParticipantLeaveWaitingRoom;
             Controller.OnParticipantJoinMeeting += Controller_OnParticipantJoinMeeting;
             Controller.OnParticipantLeaveMeeting += Controller_OnParticipantLeaveMeeting;
+            Controller.OnParticipantActiveAudioChange += Controller_OnParticipantActiveAudioChange;
+            Controller.OnParticipantRaisedHandsChange += Controller_OnParticipantRaisedHandsChange;
             Controller.OnActionTimerTick += Controller_OnActionTimerTick;
             Controller.OnExit += Controller_OnExit;
 
@@ -1031,6 +1031,19 @@ namespace ZoomMeetingBotSDK
             //tmrIdle = new System.Threading.Timer(ActionTimer, null, 0, 5000);
 
             return;
+        }
+
+        private static List<Controller.Participant> activeAudioParticipants = new List<Controller.Participant>();
+        private static List<Controller.Participant> raisedHandParticipants = new List<Controller.Participant>();
+
+        private void Controller_OnParticipantActiveAudioChange(object sender, Controller.OnParticipantActiveAudioChangeArgs e)
+        {
+            activeAudioParticipants = e.activeAudioParticipants;
+        }
+
+        private void Controller_OnParticipantRaisedHandsChange(object sender, Controller.OnParticipantRaisedHandsChangeArgs e)
+        {
+            raisedHandParticipants = e.raisedHandParticipants;
         }
 
         private void Controller_OnActionTimerTick(object sender, EventArgs e)
@@ -1552,6 +1565,28 @@ namespace ZoomMeetingBotSDK
                 return;
             }
 
+            if (sCommand == "list")
+            {
+                string response = null;
+
+                if ((sTarget == "hand") || (sTarget == "hands"))
+                {
+                    response = $"Raised Hands: {(raisedHandParticipants.Count == 0 ? "None" : raisedHandParticipants.ToDelimString())}";
+                }
+                else if ((sTarget == "talking") || (sTarget == "talkers") || (sTarget == "talk") || (sTarget == "activeaudio") || (sTarget == "audio"))
+                {
+                    response = $"Talkers: {(activeAudioParticipants.Count == 0 ? "None" : activeAudioParticipants.ToDelimString())}";
+                }
+                else
+                {
+                    response = $"Usage: /list hands|talkers";
+                }
+
+                _ = Controller.SendChatMessage(replyTo, response);
+
+                return;
+            }
+
             // All of the following commands require a target participant
 
             // If the sender refers to themselves as "me", resolve this to their actual participant name
@@ -1689,8 +1724,34 @@ namespace ZoomMeetingBotSDK
 
         public void Stop()
         {
-            ShouldExit = true;
-            Controller.Stop();
+            lock (_lock_eh)
+            {
+                ShouldExit = true;
+
+                if (chatBots != null)
+                {
+                    foreach (var chatBot in chatBots)
+                    {
+                        try
+                        {
+                            chatBot.Stop();
+                        }
+                        catch (Exception ex)
+                        {
+                            hostApp.Log(LogType.ERR, $"Exception stopping chatBot: {ex}");
+                        }
+                    }
+                }
+
+                try
+                {
+                    Controller.Stop();
+                }
+                catch (Exception ex)
+                {
+                    hostApp.Log(LogType.ERR, $"Exception stopping controller: {ex}");
+                }
+            }
         }
 
         public void SettingsChanged(object sender, EventArgs e)

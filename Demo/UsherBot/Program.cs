@@ -134,7 +134,8 @@ namespace ZoomMeetingBotSDK
             public bool PromptOnStartup { get; set; }
         }
 
-        private static HostApp hostApp;
+        private static HostApp hostApp = null;
+        private static UsherBot usherBot = null;
 
         private static ProgramSettings programSettings = null;
 
@@ -282,8 +283,6 @@ namespace ZoomMeetingBotSDK
             // TBD: Exit when Zoom app exits
             Task.Factory.StartNew(() =>
                 {
-                    UsherBot usherBot = null;
-
                     try
                     {
                         usherBot = new UsherBot();
@@ -360,7 +359,19 @@ namespace ZoomMeetingBotSDK
                 Application.DoEvents();
                 Thread.Sleep(10);
             }
-            
+
+            hostApp.Log(LogType.INF, "[Program] Cleaning Up");
+            if (usherBot != null)
+            {
+                usherBot.Stop();
+            }
+
+            if (hostApp != null)
+            {
+                hostApp.Log(LogType.INF, "[Program] Stopping HostApp");
+                hostApp.Stop();
+            }
+
             Console.WriteLine("Exiting");
             return 0;
         }
