@@ -1083,7 +1083,7 @@ namespace ZoomMeetingBotSDK
         }
 
         [MethodImplAttribute(MethodImplOptions.NoInlining)]
-        private static bool GetParticipantById(uint userId, out Participant p, bool logWarningIfNotFound = true)
+        public static bool GetParticipantById(uint userId, out Participant p, bool logWarningIfNotFound = true)
         {
             if (SpecialParticipant.TryGetValue(userId, out p))
             {

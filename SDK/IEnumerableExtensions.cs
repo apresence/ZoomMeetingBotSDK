@@ -36,7 +36,7 @@
         /// </summary>
         public static string ToDelimString<T>(this IEnumerable<T> enumerable, string delim = ", ")
         {
-            return enumerable.Select(x => x.ToString()).Aggregate((a, b) => a + delim + b);
+            return (enumerable.Count() == 0) ? string.Empty : enumerable.Select(x => x.ToString()).Aggregate((a, b) => a + delim + b);
         }
     }
 }

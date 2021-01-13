@@ -39,6 +39,8 @@ namespace ZoomMeetingBotSDK
         /// </summary>
         private static Dictionary<string, DateTime> BroadcastSentTime = new Dictionary<string, DateTime>();
 
+        private static Dictionary<uint, HashSet<string>> trackers = new Dictionary<uint, HashSet<string>>();
+
         /// <summary>
         /// Topic of the current meeting. Set with "/topic ..." command (available to admins only), sent to new participants as they join, and also retreived on-demand by "/topic".
         /// </summary>
@@ -1008,11 +1010,13 @@ namespace ZoomMeetingBotSDK
         private void Controller_OnParticipantActiveAudioChange(object sender, Controller.OnParticipantActiveAudioChangeArgs e)
         {
             activeAudioParticipants = e.activeAudioParticipants;
+            NotifyTrackers("talkers", activeAudioParticipants.ToDelimString());
         }
 
         private void Controller_OnParticipantRaisedHandsChange(object sender, Controller.OnParticipantRaisedHandsChangeArgs e)
         {
             raisedHandParticipants = e.raisedHandParticipants;
+            NotifyTrackers("hands", raisedHandParticipants.ToDelimString());
         }
 
         private void Controller_OnActionTimerTick(object sender, EventArgs e)
@@ -1197,6 +1201,44 @@ namespace ZoomMeetingBotSDK
             // Nothing to do for now ...
         }
 
+        private static string EnableTracking(uint userId, string trackingItem)
+        {
+            var bEnabled = trackers.TryGetValue(userId, out HashSet<string> items) && items.Contains(trackingItem);
+
+            if (!bEnabled)
+            {
+                if (items == null)
+                {
+                    items = new HashSet<string>();
+                }
+
+                items.Add(trackingItem);
+
+                trackers[userId] = items;
+            }
+
+            return $"Tracking of {trackingItem} {(bEnabled ? "is already enabled" : "enabled")}";
+        }
+
+        private static void NotifyTrackers(string item, string value)
+        {
+            foreach (var tracker in trackers)
+            {
+                if (tracker.Value.Contains(item))
+                {
+                    if (!Controller.GetParticipantById(tracker.Key, out Controller.Participant p))
+                    {
+                        // We couldn't get the participant object; Remove from tracker list
+                        trackers.Remove(tracker.Key);
+                    }
+                    else
+                    {
+                        _ = Controller.SendChatMessage(p, $"{item.UppercaseFirst()}: {(value.Length == 0 ? "None" : value)}");
+                    }
+                }
+            }
+        }
+
         private void Controller_OnChatMessageReceive(object sender, Controller.OnChatMessageReceiveArgs e)
         {
             var to = e.to;
@@ -1236,6 +1278,7 @@ namespace ZoomMeetingBotSDK
             else
             {
                 replyTo = from;
+                NotifyTrackers("chat", $"(from {from}) {text}");
             }
 
             // ====
@@ -1594,19 +1637,59 @@ namespace ZoomMeetingBotSDK
 
             if (sCommand == "list")
             {
+                string arg = sTarget.ToLower();
                 string response = null;
 
-                if ((sTarget == "hand") || (sTarget == "hands"))
+                if ((arg == "hand") || (arg == "hands"))
                 {
                     response = $"Raised Hands: {(raisedHandParticipants.Count == 0 ? "None" : raisedHandParticipants.ToDelimString())}";
                 }
-                else if ((sTarget == "talking") || (sTarget == "talkers") || (sTarget == "talk") || (sTarget == "activeaudio") || (sTarget == "audio"))
+                else if ((arg == "talking") || (arg == "talkers") || (arg == "talk") || (arg == "activeaudio") || (arg == "audio"))
                 {
                     response = $"Talkers: {(activeAudioParticipants.Count == 0 ? "None" : activeAudioParticipants.ToDelimString())}";
                 }
                 else
                 {
                     response = $"Usage: /list hands|talkers";
+                }
+
+                _ = Controller.SendChatMessage(replyTo, response);
+
+                return;
+            }
+
+            if ((sCommand == "track") || (sCommand == "tracking"))
+            {
+                string arg = sTarget.ToLower();
+                string response = null;
+
+                if ((arg == "off") || (arg == "stop") || (arg == "disable"))
+                {
+                    if (trackers.ContainsKey(from.userId))
+                    {
+                        trackers.Remove(from.userId);
+                        response = $"Tracking disabled";
+                    }
+                    else
+                    {
+                        response = $"Tracking is not enabled";
+                    }
+                }
+                else if ((arg == "hand") || (arg == "hands"))
+                {
+                    response = EnableTracking(from.userId, "hands");
+                }
+                else if ((arg == "talking") || (arg == "talkers") || (arg == "talk") || (arg == "activeaudio") || (arg == "audio"))
+                {
+                    response = EnableTracking(from.userId, "talkers");
+                }
+                else if ((arg == "chat") || (arg == "chats"))
+                {
+                    response = EnableTracking(from.userId, "chat");
+                }
+                else
+                {
+                    response = $"Usage: /track hands|talkers|chat|off";
                 }
 
                 _ = Controller.SendChatMessage(replyTo, response);
