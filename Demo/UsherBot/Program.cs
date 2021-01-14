@@ -281,28 +281,23 @@ namespace ZoomMeetingBotSDK
 
             // TBD: Exit when Zoom app exits
             Task.Factory.StartNew(() =>
+            {
+                try
                 {
-                    try
+                    usherBot = new UsherBot();
+                    usherBot.Init(new ControlBot.ControlBotInitParam()
                     {
-                        usherBot = new UsherBot();
-                        usherBot.Init(new ControlBot.ControlBotInitParam()
-                        {
-                            hostApp = hostApp,
-                        });
+                        hostApp = hostApp,
+                    });
 
-                        if (programSettings.PromptOnStartup)
-                        {
-                            Console.WriteLine("Press ENTER to proceed");
-                            Console.ReadLine();
-                        }
-
-                        hostApp.Start();
-                        usherBot.Start();
-                    }
-                    catch (Exception ex)
+                    if (programSettings.PromptOnStartup)
                     {
-                        Console.WriteLine(ex.ToString());
+                        Console.WriteLine("Press ENTER to proceed");
+                        Console.ReadLine();
                     }
+
+                    hostApp.Start();
+                    usherBot.Start();
 
                     Console.WriteLine("CONSOLE : === Listening for keystrokes ===");
 
@@ -358,24 +353,44 @@ namespace ZoomMeetingBotSDK
                             }
                         }
                     }
-                });
+                }
+                catch (Exception ex)
+                {
+                    hostApp.Log(LogType.ERR, $"[Program] Task thread exception: {ex}");
+                    UsherBot.shouldExit = true;
+                }
+             });
 
-            while (!UsherBot.shouldExit)
+            try
             {
-                Application.DoEvents();
-                Thread.Sleep(250);
+                while (!UsherBot.shouldExit)
+                {
+                    Application.DoEvents();
+                    Thread.Sleep(250);
+                }
+            }
+            catch (Exception ex)
+            {
+                hostApp.Log(LogType.ERR, $"[Program] Message pump exception: {ex}");
             }
 
-            hostApp.Log(LogType.INF, "[Program] Cleaning Up");
-            if (usherBot != null)
+            try
             {
-                usherBot.Stop();
-            }
+                hostApp.Log(LogType.INF, "[Program] Cleaning Up");
+                if (usherBot != null)
+                {
+                    usherBot.Stop();
+                }
 
-            if (hostApp != null)
+                if (hostApp != null)
+                {
+                    hostApp.Log(LogType.INF, "[Program] Stopping HostApp");
+                    hostApp.Stop();
+                }
+            }
+            catch (Exception ex)
             {
-                hostApp.Log(LogType.INF, "[Program] Stopping HostApp");
-                hostApp.Stop();
+                hostApp.Log(LogType.INF, $"[Program] Clean up exception {ex}");
             }
 
             Console.WriteLine("Exiting");

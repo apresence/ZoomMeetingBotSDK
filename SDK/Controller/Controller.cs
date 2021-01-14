@@ -43,6 +43,7 @@ namespace ZoomMeetingBotSDK
             {
                 ZoomWebDomain = "https://zoom.us";
                 ActionTimerRateInMS = 1000;
+                ActiveAudioDebounceTimeInMS = 7000;
             }
 
             /// <summary>
@@ -84,6 +85,12 @@ namespace ZoomMeetingBotSDK
             /// Rate at which to fire the action timer.
             /// </summary>
             public int ActionTimerRateInMS { get; set; }
+
+            /// <summary>
+            /// Number of seconds of guard time to use before signalling an audio change event.  This cuts down on unnecessary events.  For example instead of:
+            /// activeaudio: A; None; B; None; A B; None... it will look more like talkers: A; talkers: AB; talkers: None.
+            /// </summary>
+            public int ActiveAudioDebounceTimeInMS { get; set; }
         }
         public static ControllerConfigurationSettings cfg = new ControllerConfigurationSettings();
 
@@ -307,8 +314,8 @@ namespace ZoomMeetingBotSDK
                 }
 
                 var role = participantController.GetUserByUserID(userId).GetUserRole(); // TBD: This may throw an exception?
-                p.isHost = role == UserRole.USERROLE_HOST;
-                p.isCoHost = role == UserRole.USERROLE_COHOST;
+                p.IsHost = role == UserRole.USERROLE_HOST;
+                p.IsCoHost = role == UserRole.USERROLE_COHOST;
 
                 hostApp.Log(LogType.INF, $"{new StackFrame(1).GetMethod().Name} p={p} newRole={role}");
             }
@@ -335,7 +342,7 @@ namespace ZoomMeetingBotSDK
                 text = chatMsg.GetContent(),
             };
 
-            e.isToEveryone = SpecialParticipant.TryGetValue(e.to.userId, out _);
+            e.isToEveryone = SpecialParticipant.TryGetValue(e.to.UserId, out _);
             hostApp.Log(LogType.DBG, $"chatMsgNotification from={e.from} to={e.to} isToEveryone={e.isToEveryone} text={repr(e.text)}");
 
             OnChatMessageReceive(null, e);
@@ -369,9 +376,9 @@ namespace ZoomMeetingBotSDK
                         continue;
                     }
 
-                    if (p.status != ParticipantStatus.Attending)
+                    if (p.Status != ParticipantStatus.Attending)
                     {
-                        hostApp.Log(LogType.WRN, $"{MethodBase.GetCurrentMethod().Name} Participant {p} status is {p.status}, not Attending");
+                        hostApp.Log(LogType.WRN, $"{MethodBase.GetCurrentMethod().Name} Participant {p} status is {p.Status}, not Attending");
                         continue;
                     }
 
@@ -393,7 +400,7 @@ namespace ZoomMeetingBotSDK
                 if (GetParticipantById(userId, out Participant p))
                 {
                     hostApp.Log(LogType.DBG, $"userNameChanged p={p} newName={repr(userName)}");
-                    p.name = userName;
+                    p.Name = userName;
                 }
             }
         }
@@ -426,14 +433,14 @@ namespace ZoomMeetingBotSDK
                         p.audioDevice = currentAudioDevice;
                     }
 
-                    if (p.isAudioMuted != currentIsAudioMuted)
+                    if (p.IsAudioMuted != currentIsAudioMuted)
                     {
                         hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} p={p} audioMuted={currentIsAudioMuted}");
-                        p.isAudioMuted = currentIsAudioMuted;
+                        p.IsAudioMuted = currentIsAudioMuted;
                     }
 
                     // TBD: Assuming this makes sense?
-                    p.isPurePhoneUser = participantController.GetUserByUserID(p.userId).IsPurePhoneUser();
+                    p.IsPurePhoneUser = participantController.GetUserByUserID(p.UserId).IsPurePhoneUser();
                 }
             }
         }
@@ -451,10 +458,10 @@ namespace ZoomMeetingBotSDK
 
                 var currentVideoOn = status == VideoStatus.Video_ON;
 
-                if (currentVideoOn != p.isVideoOn)
+                if (currentVideoOn != p.IsVideoOn)
                 {
                     hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} p={p} videoOn={currentVideoOn}");
-                    p.isVideoOn = currentVideoOn;
+                    p.IsVideoOn = currentVideoOn;
                 }
             }
         }
@@ -500,8 +507,8 @@ namespace ZoomMeetingBotSDK
                 return;
             }
 
-            if ((p.status != ParticipantStatus.Waiting) && (p.status != ParticipantStatus.Joining)) {
-                hostApp.Log(LogType.WRN, $"{MethodBase.GetCurrentMethod().Name} Participant {p} is {p.status}, not Waiting or Joining");
+            if ((p.Status != ParticipantStatus.Waiting) && (p.Status != ParticipantStatus.Joining)) {
+                hostApp.Log(LogType.WRN, $"{MethodBase.GetCurrentMethod().Name} Participant {p} is {p.Status}, not Waiting or Joining");
                 return;
             }
 
@@ -566,17 +573,25 @@ namespace ZoomMeetingBotSDK
         }
 
         /// <summary>
-        /// Fired when the list of participants making sound (or talking) "changes".  I put "changes" in quotes because it seems the event is fired every second or two as long as
-        /// someone is talking, even if the list of activeAudio have not changed.  For this reason, we keep track of the list of activeAudio as of the last round and only process further
-        /// if the list has acutally changed.
+        /// Applies debounce to active audio participants and fires event when the active audio list changes.
         /// </summary>
-        public static void Zoom_OnUserActiveAudioChange(uint[] lstActiveAudio)
+        private static void UpdateParticipantActiveAudio()
         {
-            //hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} ids={repr(lstActiveAudio)}");
+            // TBD: Maybe add a throttle, like... no more frequently than once per second?
 
-            var currentActiveAudio = lstActiveAudio == null ? new HashSet<uint>() : lstActiveAudio.ToHashSet<uint>();
+            var activityCutOffDT = DateTime.UtcNow.AddMilliseconds(-cfg.ActiveAudioDebounceTimeInMS);
+            var currentActiveAudio = new HashSet<uint>();
 
-            var list = new List<Participant>();
+            lock (participants)
+            {
+                foreach (var p in participants.Values)
+                {
+                    if (p.LastAudioActivityDT > activityCutOffDT)
+                    {
+                        currentActiveAudio.Add(p.UserId);
+                    }
+                }
+            }
 
             lock (activeAudio)
             {
@@ -586,6 +601,7 @@ namespace ZoomMeetingBotSDK
                     return;
                 }
 
+                var list = new List<Participant>();
                 activeAudio = currentActiveAudio;
                 foreach (uint userId in activeAudio)
                 {
@@ -594,17 +610,41 @@ namespace ZoomMeetingBotSDK
                         list.Add(p);
                     }
                 }
+
+                // Sort by name so it's easier to eyeball changes in the logs
+                list.Sort(delegate (Participant p1, Participant p2) { return p1.ToString().CompareTo(p2.ToString()); });
+
+                hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} list: {((list.Count == 0) ? "None" : list.ToDelimString())}");
+
+                OnParticipantActiveAudioChange(null, new OnParticipantActiveAudioChangeArgs()
+                {
+                    activeAudioParticipants = list,
+                });
+            }
+        }
+
+        /// <summary>
+        /// Fired when the list of participants making sound (or talking) "changes".  I put "changes" in quotes because it seems the event is fired every second or two as long as
+        /// someone is talking, even if the list of activeAudio have not changed.
+        /// </summary>
+        public static void Zoom_OnUserActiveAudioChange(uint[] lstActiveAudio)
+        {
+            // This event fires too often (spammy)...
+            //hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} ids={repr(lstActiveAudio)}");
+
+            var nowDT = DateTime.UtcNow;
+            if (lstActiveAudio != null)
+            {
+                foreach (var userId in lstActiveAudio)
+                {
+                    if (GetParticipantById(userId, out Participant p))
+                    {
+                        p.LastAudioActivityDT = nowDT;
+                    }
+                }
             }
 
-            // Sort by name so it's easier to eyeball changes in the logs
-            list.Sort(delegate (Participant p1, Participant p2) { return p1.ToString().CompareTo(p2.ToString()); });
-
-            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} list: {((list.Count == 0) ? "None" : list.ToDelimString())}");
-
-            OnParticipantActiveAudioChange(null, new OnParticipantActiveAudioChangeArgs()
-            {
-                activeAudioParticipants = list,
-            });
+            UpdateParticipantActiveAudio();
         }
 
         public static void Zoom_OnSpotlightVideoChangeNotification(bool bSpotlight, uint userid)
@@ -800,43 +840,43 @@ namespace ZoomMeetingBotSDK
             Participant p = GetOrCreateParticipant(userId, user.GetUserNameW(), false);
 
             p.audioDevice = (ControllerAudioType)user.GetAudioJoinType();
-            p.isAudioMuted = user.IsAudioMuted();
-            p.isHost = user.IsHost();
-            p.isCoHost = user.GetUserRole() == UserRole.USERROLE_COHOST;
-            p.status = waiting ? ParticipantStatus.Waiting : ParticipantStatus.Attending;
-            p.isMe = user.IsMySelf();
-            p.isPurePhoneUser = user.IsPurePhoneUser();
-            p.isVideoOn = user.IsVideoOn();
-            p.isRaiseHand = user.IsRaiseHand();
+            p.IsAudioMuted = user.IsAudioMuted();
+            p.IsHost = user.IsHost();
+            p.IsCoHost = user.GetUserRole() == UserRole.USERROLE_COHOST;
+            p.Status = waiting ? ParticipantStatus.Waiting : ParticipantStatus.Attending;
+            p.IsMe = user.IsMySelf();
+            p.IsPurePhoneUser = user.IsPurePhoneUser();
+            p.IsVideoOn = user.IsVideoOn();
+            p.IsHandRaised = user.IsRaiseHand();
 
-            if (p.isMe)
+            if (p.IsMe)
             {
                 me = p;
             }
 
             if (waiting)
             {
-                if (p.dtWaiting < dtNow)
+                if (p.WaitingRoomEntryDT < dtNow)
                 {
-                    p.dtWaiting = dtNow;
+                    p.WaitingRoomEntryDT = dtNow;
                 }
 
-                p.dtAttending = DateTime.MinValue;
+                p.MeetingEntryDT = DateTime.MinValue;
             }
             else
             {
-                if (p.dtAttending < dtNow)
+                if (p.MeetingEntryDT < dtNow)
                 {
-                    p.dtAttending = dtNow;
+                    p.MeetingEntryDT = dtNow;
                 }
             }
 
             lock (participants) {
                 if (participants.TryGetValue(userId, out Participant existing))
                 {
-                    if (p.status != existing.status)
+                    if (p.Status != existing.Status)
                     {
-                        hostApp.Log(LogType.INF, $"Participant {p} changed from {existing.status} to {p.status}");
+                        hostApp.Log(LogType.INF, $"Participant {p} changed from {existing.Status} to {p.Status}");
                     }
                 }
                 else
@@ -854,12 +894,12 @@ namespace ZoomMeetingBotSDK
         {
             lock (participants)
             {
-                if (!participants.ContainsKey(p.userId))
+                if (!participants.ContainsKey(p.UserId))
                 {
                     return;
                 }
 
-                participants.Remove(p.userId);
+                participants.Remove(p.UserId);
             }
         }
 
@@ -870,14 +910,14 @@ namespace ZoomMeetingBotSDK
         {
             public static readonly Participant everyoneInMeeting = new Participant()
             {
-                userId = 0,
-                name = "Everyone (in Meeting)",
+                UserId = 0,
+                Name = "Everyone (in Meeting)",
             };
 
             public static readonly Participant everyoneInWaitingRoom = new Participant()
             {
-                userId = 4294967295, // TBD: This doesn't actually work...
-                name = "Everyone (in Waiting Room)",
+                UserId = 4294967295, // TBD: This doesn't actually work...
+                Name = "Everyone (in Waiting Room)",
             };
 
             /// <summary>This method returns true if the given recipient is one of the special Everyone options; false otherwise.</summary>
@@ -888,29 +928,29 @@ namespace ZoomMeetingBotSDK
 
             public static bool IsEveryone(uint userId)
             {
-                return (userId == everyoneInMeeting.userId || userId == everyoneInWaitingRoom.userId);
+                return (userId == everyoneInMeeting.UserId || userId == everyoneInWaitingRoom.UserId);
             }
 
             public static bool IsEveryone(Participant p)
             {
-                return IsEveryone(p.userId);
+                return IsEveryone(p.UserId);
             }
 
             /// <summary>When there is nobody in the waiting room, the "Everyone (in Meeting)" selection item is renamed to "Everyone".  This
             /// method normalizes the value.</summary>
             public static string Normalize(string name)
             {
-                return name == "Everyone" ? everyoneInMeeting.name : name;
+                return name == "Everyone" ? everyoneInMeeting.Name : name;
             }
 
             public static bool TryGetValue(uint id, out Participant participant)
             {
-                if (id == everyoneInMeeting.userId)
+                if (id == everyoneInMeeting.UserId)
                 {
                     participant = everyoneInMeeting;
                     return true;
                 }
-                else if (id == everyoneInWaitingRoom.userId)
+                else if (id == everyoneInWaitingRoom.UserId)
                 {
                     participant = everyoneInWaitingRoom;
                     return true;
@@ -922,12 +962,12 @@ namespace ZoomMeetingBotSDK
 
             public static bool TryGet(string name, out Participant participant)
             {
-                if (name == everyoneInMeeting.name)
+                if (name == everyoneInMeeting.Name)
                 {
                     participant = everyoneInMeeting;
                     return true;
                 }
-                else if (name == everyoneInWaitingRoom.name)
+                else if (name == everyoneInWaitingRoom.Name)
                 {
                     participant = everyoneInWaitingRoom;
                     return true;
@@ -984,32 +1024,35 @@ namespace ZoomMeetingBotSDK
 
         public class Participant
         {
-            public uint userId = 0;
-            public string name = null;
+            public uint UserId = 0;
+            public string Name = null;
             public ControllerAudioType audioDevice = ControllerAudioType.AUDIOTYPE_UNKNOWN;
             //public UserRole role = UserRole.USERROLE_NONE; // TBD: No events other than onHostChange and onCoHostChange
-            public bool isAudioMuted = false;
-            public bool isHost = false;
-            public bool isCoHost = false;
+            public bool IsAudioMuted = false;
+            public bool IsHost = false;
+            public bool IsCoHost = false;
             //public bool isInWaitingRoom = false;
-            public ParticipantStatus status = ParticipantStatus.Unknown;
-            public bool isMe = false;
-            public bool isPurePhoneUser = false; // TBD: No event for this (?)
-            public bool isRaiseHand = false;
-            public bool isVideoOn = false;
+            public ParticipantStatus Status = ParticipantStatus.Unknown;
+            public bool IsMe = false;
+            public bool IsPurePhoneUser = false; // TBD: No event for this (?)
+            public bool IsHandRaised = false;
+            public bool IsVideoOn = false;
 
-            public DateTime dtWaiting = DateTime.MinValue;
-            public DateTime dtAttending = DateTime.MinValue;
+            public DateTime LastAudioActivityDT = DateTime.MinValue;
+            public DateTime WaitingRoomEntryDT = DateTime.MinValue;
+            public DateTime MeetingEntryDT = DateTime.MinValue;
 
             public override string ToString()
             {
-                return $"{repr(name)}#{userId}";
+                return $"{repr(Name)}#{UserId}";
             }
         }
 
         public static Dictionary<uint, Participant> participants = new Dictionary<uint, Participant>();
-        public static HashSet<uint> activeAudio = new HashSet<uint>();
+
         public static List<uint> raisedHands = new List<uint>();
+
+        public static HashSet<uint> activeAudio = new HashSet<uint>();
 
         // Special Participants
         public static Participant me = null;
@@ -1066,7 +1109,7 @@ namespace ZoomMeetingBotSDK
                     int numAttending = 0;
                     foreach (var p in participants.Values)
                     {
-                        if (p.status == ParticipantStatus.Attending)
+                        if (p.Status == ParticipantStatus.Attending)
                         {
                             numAttending++;
                         }
@@ -1099,6 +1142,8 @@ namespace ZoomMeetingBotSDK
                         {
                             hostApp.Log(LogType.WRN, $"OnActionTimerTick lagging {(int)(execTimeInMS - rateInMS)}ms");
                         }
+
+                        UpdateParticipantActiveAudio();
                     }
                 }
             });
@@ -1152,7 +1197,7 @@ namespace ZoomMeetingBotSDK
             {
                 foreach (var p in participants.Values)
                 {
-                    if (p.name == name)
+                    if (p.Name == name)
                     {
                         ret.Add(p);
                     }
@@ -1212,8 +1257,8 @@ namespace ZoomMeetingBotSDK
             {
                 p = new Participant()
                 {
-                    userId = userId,
-                    name = name,
+                    UserId = userId,
+                    Name = name,
                 };
 
                 if (logWarningIfNotFound)
@@ -1230,7 +1275,7 @@ namespace ZoomMeetingBotSDK
         {
             try
             {
-                var sdkErr = chatController.SendChatTo(to.userId, text);
+                var sdkErr = chatController.SendChatTo(to.UserId, text);
                 if (sdkErr != SDKError.SDKERR_SUCCESS)
                 {
                     throw new Exception(sdkErr.ToString());
@@ -1268,7 +1313,7 @@ namespace ZoomMeetingBotSDK
         {
             try
             {
-                var sdkErr = participantController.ChangeUserName(p.userId, newName, false);
+                var sdkErr = participantController.ChangeUserName(p.UserId, newName, false);
                 if (sdkErr != SDKError.SDKERR_SUCCESS)
                 {
                     throw new Exception(sdkErr.ToString());
@@ -1287,7 +1332,7 @@ namespace ZoomMeetingBotSDK
         {
             try
             {
-                var sdkErr = audioController.UnMuteAudio(p.userId);
+                var sdkErr = audioController.UnMuteAudio(p.UserId);
                 if (sdkErr != SDKError.SDKERR_SUCCESS)
                 {
                     throw new Exception(sdkErr.ToString());
@@ -1306,7 +1351,7 @@ namespace ZoomMeetingBotSDK
         {
             try
             {
-                var sdkErr = audioController.MuteAudio(p.userId, allowUnmute);
+                var sdkErr = audioController.MuteAudio(p.UserId, allowUnmute);
                 if (sdkErr != SDKError.SDKERR_SUCCESS)
                 {
                     throw new Exception(sdkErr.ToString());
@@ -1325,7 +1370,7 @@ namespace ZoomMeetingBotSDK
         {
             try
             {
-                var sdkErr = waitController.AdmitToMeeting(p.userId);
+                var sdkErr = waitController.AdmitToMeeting(p.UserId);
                 if (sdkErr != SDKError.SDKERR_SUCCESS)
                 {
                     throw new Exception(sdkErr.ToString());
@@ -1335,7 +1380,7 @@ namespace ZoomMeetingBotSDK
                 {
                     // Admitting a participant takes several seconds; Mark them as Joining so that we don't try to admit them again
                     hostApp.Log(LogType.INF, $"Participant {p} is joining the meeting");
-                    p.status = ParticipantStatus.Joining;
+                    p.Status = ParticipantStatus.Joining;
                 }
 
                 return true;
@@ -1355,11 +1400,11 @@ namespace ZoomMeetingBotSDK
                 SDKError sdkErr;
                 if (newRole == ParticipantRole.CoHost)
                 {
-                    sdkErr = participantController.AssignCoHost(p.userId);
+                    sdkErr = participantController.AssignCoHost(p.UserId);
                 }
                 else if (newRole == ParticipantRole.Host)
                 {
-                    sdkErr = participantController.MakeHost(p.userId);
+                    sdkErr = participantController.MakeHost(p.UserId);
                 }
                 else
                 {
@@ -1384,7 +1429,7 @@ namespace ZoomMeetingBotSDK
         {
             try
             {
-                var sdkErr = participantController.RevokeCoHost(p.userId);
+                var sdkErr = participantController.RevokeCoHost(p.UserId);
                 if (sdkErr != SDKError.SDKERR_SUCCESS)
                 {
                     throw new Exception(sdkErr.ToString());
@@ -1403,7 +1448,7 @@ namespace ZoomMeetingBotSDK
         {
             try
             {
-                var sdkErr = participantController.ExpelUser(p.userId);
+                var sdkErr = participantController.ExpelUser(p.UserId);
                 if (sdkErr != SDKError.SDKERR_SUCCESS)
                 {
                     throw new Exception(sdkErr.ToString());
@@ -1422,7 +1467,7 @@ namespace ZoomMeetingBotSDK
         {
             try
             {
-                var sdkErr = waitController.PutInWaitingRoom(p.userId);
+                var sdkErr = waitController.PutInWaitingRoom(p.UserId);
                 if (sdkErr != SDKError.SDKERR_SUCCESS)
                 {
                     throw new Exception(sdkErr.ToString());

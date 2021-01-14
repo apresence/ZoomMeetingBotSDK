@@ -110,6 +110,7 @@ namespace ZoomMeetingBotSDK
                 OneTimeHiSequences = new Dictionary<string, string>();
                 WaitingRoomAnnouncementMessage = null;
                 WaitingRoomAnnouncementDelaySecs = 60;
+                IncludeUserIdsInLists = false;
             }
 
             /// <summary>
@@ -179,6 +180,11 @@ namespace ZoomMeetingBotSDK
             /// Controls the sending frequency for WaitingRoomAnnouncementMessage.
             /// </summary>
             public int WaitingRoomAnnouncementDelaySecs { get; set; }
+
+            /// <summary>
+            /// Controls including user ids in lists or not.  If on, users are listed like "\"User Name\"#123456"; If off just "User Name".
+            /// </summary>
+            public bool IncludeUserIdsInLists { get; set; }
         }
 
         public static BotConfigurationSettings cfg = new BotConfigurationSettings();
@@ -295,7 +301,14 @@ namespace ZoomMeetingBotSDK
 
         public static bool SendTopic(Controller.Participant recipient, bool useDefault = true)
         {
-            if (recipient.isPurePhoneUser)
+            // Skip pure phone users since we can't send chat messages to them
+            if (recipient.IsPurePhoneUser)
+            {
+                return false;
+            }
+
+            // Only send automated topic (useDefault = false) once per unique userId/name.  This prevents us from sending the topic to someone more than once if they leave/re-join the meeting
+            if (!useDefault && (DicTopicSends.ContainsKey(recipient.UserId) || DicTopicSends.Values.Contains(recipient.Name)))
             {
                 return false;
             }
@@ -310,7 +323,7 @@ namespace ZoomMeetingBotSDK
             var response = OneTimeHi("morning", recipient);
             if (response != null)
             {
-                response = FormatChatResponse(response, recipient.name) + " " + topic;
+                response = FormatChatResponse(response, recipient.Name) + " " + topic;
             }
             else
             {
@@ -350,10 +363,10 @@ namespace ZoomMeetingBotSDK
             {
                 // If I've got my own participant object, do any self-automation needed
 
-                if (((cfg.BotAutomationFlags & BotAutomationFlag.ReclaimHost) != 0) && (!Controller.me.isHost))
+                if (((cfg.BotAutomationFlags & BotAutomationFlag.ReclaimHost) != 0) && (!Controller.me.IsHost))
                 {
                     // TBD: Throttle ReclaimHost attempts?
-                    if (Controller.me.isCoHost)
+                    if (Controller.me.IsCoHost)
                     {
                         hostApp.Log(LogType.WRN, "BOT I'm Co-Host instead of Host; Trying to reclaim host");
                     }
@@ -372,14 +385,14 @@ namespace ZoomMeetingBotSDK
                     }
                 }
 
-                if (((cfg.BotAutomationFlags & BotAutomationFlag.RenameMyself) != 0) && (Controller.me.name != cfg.MyParticipantName))
+                if (((cfg.BotAutomationFlags & BotAutomationFlag.RenameMyself) != 0) && (Controller.me.Name != cfg.MyParticipantName))
                 {
                     // Rename myself.  Event handler will type in the name when the dialog pops up
-                    hostApp.Log(LogType.INF, $"BOT Renaming myself from {repr(Controller.me.name)} to {repr(cfg.MyParticipantName)}");
+                    hostApp.Log(LogType.INF, $"BOT Renaming myself from {repr(Controller.me.Name)} to {repr(cfg.MyParticipantName)}");
                     _ = Controller.RenameParticipant(Controller.me, cfg.MyParticipantName);
                 }
 
-                if (((cfg.BotAutomationFlags & BotAutomationFlag.UnmuteMyself) != 0) && Controller.me.isAudioMuted)
+                if (((cfg.BotAutomationFlags & BotAutomationFlag.UnmuteMyself) != 0) && Controller.me.IsAudioMuted)
                 {
                     // Unmute myself
                     hostApp.Log(LogType.INF, "BOT Unmuting myself");
@@ -406,12 +419,12 @@ namespace ZoomMeetingBotSDK
             foreach (Controller.Participant p in participants)
             {
                 // Skip over my own participant record; We handled that earlier.  Also, skip over anyone not in the waiting room
-                if (p.isMe)
+                if (p.IsMe)
                 {
                     continue;
                 }
 
-                switch (p.status)
+                switch (p.Status)
                 {
                     case Controller.ParticipantStatus.Attending:
                         // Do attending actions
@@ -476,14 +489,14 @@ namespace ZoomMeetingBotSDK
             {
                 // Looking for a participant that is not me, is using computer audio, and is a known good user
                 var idx = participants.FindIndex(x => (
-                    (!x.isMe) &&
-                    (x.status == Controller.ParticipantStatus.Attending) &&
+                    (!x.IsMe) &&
+                    (x.Status == Controller.ParticipantStatus.Attending) &&
                     (x.audioDevice == Controller.ControllerAudioType.AUDIOTYPE_VOIP) &&
-                    GoodUsers.ContainsKey(CleanUserName(x.name))
+                    GoodUsers.ContainsKey(CleanUserName(x.Name))
                 ));
                 if (idx != -1)
                 {
-                    FirstParticipantGreeted = participants[idx].name;
+                    FirstParticipantGreeted = participants[idx].Name;
                     var msg = FormatChatResponse(OneTimeHi("morning", participants[idx]), FirstParticipantGreeted);
 
                     Sound.Play("bootup");
@@ -778,6 +791,7 @@ namespace ZoomMeetingBotSDK
         }
 
         private static readonly Dictionary<uint, string> DicOneTimeHis = new Dictionary<uint, string>();
+        private static readonly Dictionary<uint, string> DicTopicSends = new Dictionary<uint, string>();
 
         private static string OneTimeHi(string text, Controller.Participant p)
         {
@@ -788,8 +802,8 @@ namespace ZoomMeetingBotSDK
                 return response;
             }
 
-            // Do one-time "hi" only once
-            if (DicOneTimeHis.ContainsKey(p.userId))
+            // Do one-time "hi" only once per unique userId/name
+            if (DicOneTimeHis.ContainsKey(p.UserId) || DicOneTimeHis.Values.Contains(p.Name))
             {
                 return null;
             }
@@ -805,7 +819,7 @@ namespace ZoomMeetingBotSDK
 
             if (response != null)
             {
-                DicOneTimeHis.Add(p.userId, response); // TBD: Really only need key hash
+                DicOneTimeHis.Add(p.UserId, p.Name);
             }
 
             return response;
@@ -830,7 +844,7 @@ namespace ZoomMeetingBotSDK
                 return;
             }
 
-            if (newSpeaker.name == speaker)
+            if (newSpeaker.Name == speaker)
             {
                 _ = Controller.SendChatMessage(from, $"Speaker is already {newSpeaker}");
                 return;
@@ -845,14 +859,14 @@ namespace ZoomMeetingBotSDK
             foreach (var p in Controller.participants.Values)
             {
                 // Skip over me, host & cohost
-                if (p.isMe || p.isHost || p.isCoHost)
+                if (p.IsMe || p.IsHost || p.IsCoHost)
                 {
                     continue;
                 }
 
-                if (p.userId == newSpeaker.userId)
+                if (p.UserId == newSpeaker.UserId)
                 {
-                    if (p.isAudioMuted)
+                    if (p.IsAudioMuted)
                     {
                         hostApp.Log(LogType.INF, $"Unmuting {p}");
                         Controller.UnmuteParticipant(p);
@@ -860,7 +874,7 @@ namespace ZoomMeetingBotSDK
                 }
                 else
                 {
-                    if (!p.isAudioMuted)
+                    if (!p.IsAudioMuted)
                     {
                         hostApp.Log(LogType.INF, $"Muting {p}");
                         Controller.MuteParticipant(p);
@@ -869,7 +883,7 @@ namespace ZoomMeetingBotSDK
             }
 
             _ = Controller.SendChatMessage(from, $"Speaker set to {newSpeaker}");
-            speaker = newSpeaker.name;
+            speaker = newSpeaker.Name;
         }
 
         private static List<IChatBot> chatBots = null;
@@ -970,7 +984,7 @@ namespace ZoomMeetingBotSDK
 
             if (!endForAll)
             {
-                if (!Controller.me.isHost)
+                if (!Controller.me.IsHost)
                 {
                     hostApp.Log(LogType.DBG, "[UsherBot] ReallyLeaveMeeting - I am not host");
                 }
@@ -982,7 +996,7 @@ namespace ZoomMeetingBotSDK
                     foreach (Controller.Participant p in Controller.participants.Values)
                     {
                         // TBD: Could also verify the participant is GoodUser^
-                        if (p.isCoHost)
+                        if (p.IsCoHost)
                         {
                             altHost = p;
                             break;
@@ -1059,6 +1073,25 @@ namespace ZoomMeetingBotSDK
             Sound.Init(hostApp);
         }
 
+        /// <summary>
+        /// Returns a delmited list of participants.
+        /// </summary>
+        /// <param name="participants">The list of participants.</param>
+        /// <param name="includeIDs">If true, includes names and IDs, otherwise just names.</param>
+        /// <param name="delim">Delimiter to use.</param>
+        /// <returns>A delimited list string.</returns>
+        private string ParticipantListToString(List<Controller.Participant> participants, string delim = " | ")
+        {
+            if (participants.Count() == 0)
+            {
+                return "None";
+            }
+
+            return cfg.IncludeUserIdsInLists ?
+                participants.Select(x => x.ToString()).Aggregate((a, b) => a + delim + b) :
+                participants.Select(x => x.Name).Aggregate((a, b) => a + delim + b);
+        }
+
         public void Start()
         {
             if ((cfg.BotAutomationFlags & BotAutomationFlag.Converse) != 0)
@@ -1089,13 +1122,13 @@ namespace ZoomMeetingBotSDK
         private void Controller_OnParticipantActiveAudioChange(object sender, Controller.OnParticipantActiveAudioChangeArgs e)
         {
             activeAudioParticipants = e.activeAudioParticipants;
-            NotifyTrackers("talkers", activeAudioParticipants.ToDelimString());
+            NotifyTrackers("talkers", ParticipantListToString(activeAudioParticipants));
         }
 
         private void Controller_OnParticipantRaisedHandsChange(object sender, Controller.OnParticipantRaisedHandsChangeArgs e)
         {
             raisedHandParticipants = e.raisedHandParticipants;
-            NotifyTrackers("hands", raisedHandParticipants.ToDelimString());
+            NotifyTrackers("hands", ParticipantListToString(raisedHandParticipants));
         }
 
         private void Controller_OnActionTimerTick(object sender, EventArgs e)
@@ -1163,16 +1196,16 @@ namespace ZoomMeetingBotSDK
             var bAdmitOthers = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitOthers) != 0;
             var waitMsg = String.Empty;
 
-            if (p.isMe || (!bAdmitKnown && !bAdmitOthers))
+            if (p.IsMe || (!bAdmitKnown && !bAdmitOthers))
             {
                 // Nothing to do
                 return false;
             }
 
-            var sCleanName = CleanUserName(p.name);
+            var sCleanName = CleanUserName(p.Name);
 
             waitMsg = $"BOT Not admitting {p} : BAD USER";
-            if (BadUsers.ContainsKey(p.userId) || BadUsers.Values.Contains(sCleanName))
+            if (BadUsers.ContainsKey(p.UserId) || BadUsers.Values.Contains(p.Name))
             {
                 // Make sure we don't display the message more than once
                 if (!HsParticipantMessages.Contains(waitMsg))
@@ -1206,7 +1239,7 @@ namespace ZoomMeetingBotSDK
             bool bAdmit = false;
 
             DateTime dtNow = DateTime.UtcNow;
-            DateTime dtWhenToAdmit = p.dtWaiting.AddSeconds(cfg.UnknownParticipantWaitSecs);
+            DateTime dtWhenToAdmit = p.WaitingRoomEntryDT.AddSeconds(cfg.UnknownParticipantWaitSecs);
             if (dtWhenToAdmit < dtNow)
             {
                 // Too early to admit this participant
@@ -1247,7 +1280,7 @@ namespace ZoomMeetingBotSDK
         {
             // Handle automatically co-hosting folks here if needed
 
-            if ((p.isMe) || (p.isCoHost))
+            if ((p.IsMe) || (p.IsCoHost))
             {
                 // I can't promote myself, and I can't co-host someone who is already co-hosted
                 return false;
@@ -1259,7 +1292,7 @@ namespace ZoomMeetingBotSDK
                 return false;
             }
 
-            var cleanName = CleanUserName(p.name);
+            var cleanName = CleanUserName(p.Name);
 
             GoodUsers.TryGetValue(cleanName, out bool bUserShouldBeCoHost);
 
@@ -1270,7 +1303,7 @@ namespace ZoomMeetingBotSDK
             }
 
             var msg = $"BOT Not co-hosting {p} : BAD USER";
-            if (BadUsers.ContainsKey(p.userId) || BadUsers.Values.Contains(cleanName))
+            if (BadUsers.ContainsKey(p.UserId) || BadUsers.Values.Contains(p.Name))
             {
                 // Make sure we don't display the message more than once
                 if (!HsParticipantMessages.Contains(msg))
@@ -1287,7 +1320,7 @@ namespace ZoomMeetingBotSDK
                 HsParticipantMessages.Remove(msg);
             }
 
-            if ((!Controller.me.isHost) && (!Controller.me.isCoHost))
+            if ((!Controller.me.IsHost) && (!Controller.me.IsCoHost))
             {
                 hostApp.Log(LogType.WRN, $"BOT Participant {p} should be Co-Host, but I am not Co-Host or Host");
                 return false;
@@ -1327,43 +1360,50 @@ namespace ZoomMeetingBotSDK
 
         private static string EnableTracking(uint userId, string trackingItem)
         {
-            var bEnabled = trackers.TryGetValue(userId, out HashSet<string> items) && items.Contains(trackingItem);
-
-            if (!bEnabled)
+            lock (trackers)
             {
-                if (items == null)
+                var bEnabled = trackers.TryGetValue(userId, out HashSet<string> items) && items.Contains(trackingItem);
+
+                if (!bEnabled)
                 {
-                    items = new HashSet<string>();
+                    if (items == null)
+                    {
+                        items = new HashSet<string>();
+                    }
+
+                    items.Add(trackingItem);
+
+                    trackers[userId] = items;
                 }
 
-                items.Add(trackingItem);
-
-                trackers[userId] = items;
+                return $"Tracking of {trackingItem} {(bEnabled ? "is already enabled" : "enabled")}";
             }
-
-            return $"Tracking of {trackingItem} {(bEnabled ? "is already enabled" : "enabled")}";
         }
 
         private static void NotifyTrackers(string item, string value, uint dontSendToUserId = 0)
         {
-            foreach (var tracker in trackers)
+            lock (trackers)
             {
-                if (tracker.Value.Contains(item))
+                foreach (var tracker in trackers)
                 {
-                    if (!Controller.GetParticipantById(tracker.Key, out Controller.Participant p))
+                    if (tracker.Value.Contains(item))
                     {
-                        // We couldn't get the participant object; Remove from tracker list
-                        trackers.Remove(tracker.Key);
-                    }
-                    else
-                    {
-                        if ((dontSendToUserId == 0) || (dontSendToUserId != tracker.Key))
+                        if (!Controller.GetParticipantById(tracker.Key, out Controller.Participant p))
                         {
-                            _ = Controller.SendChatMessage(p, $"{item.UppercaseFirst()}: {(value.Length == 0 ? "None" : value)}");
+                            // We couldn't get the participant object; Remove from tracker list
+                            trackers.Remove(tracker.Key);
+                        }
+                        else
+                        {
+                            if ((dontSendToUserId == 0) || (dontSendToUserId != tracker.Key))
+                            {
+                                _ = Controller.SendChatMessage(p, $"{item.UppercaseFirst()}: {value}");
+                            }
                         }
                     }
                 }
             }
+
         }
 
         /// <summary>
@@ -1409,7 +1449,7 @@ namespace ZoomMeetingBotSDK
             // TBD: All of this parsing is really messy. It could use a re-write!
 
             // If the message is from the bot or we're not configured to process chat messages, then bail
-            if (e.from.isMe || ((cfg.BotAutomationFlags & BotAutomationFlag.ProcessChat) == 0))
+            if (e.from.IsMe || ((cfg.BotAutomationFlags & BotAutomationFlag.ProcessChat) == 0))
             {
                 return;
             }
@@ -1436,11 +1476,11 @@ namespace ZoomMeetingBotSDK
             else
             {
                 replyTo = from;
-                NotifyTrackers("chat", $"(from {from}) {text}", from.userId);
+                NotifyTrackers("chat", $"(from {from}) {text}", from.UserId);
 
                 // Currently the SDK only sends events for chats sent to everyone or sent to me, but it's possible that may change in the future.
                 //   We do a sanity check here to make sure we don't respond to messages sent to other participants
-                if (!to.isMe)
+                if (!to.IsMe)
                 {
                     return;
                 }
@@ -1493,7 +1533,7 @@ namespace ZoomMeetingBotSDK
                         string failureMsg = null;
                         try
                         {
-                            response = chatBot.Converse(text, from.name); // TBD: from.userId?
+                            response = chatBot.Converse(text, from.Name); // TBD: from.userId?
                             if (response == null)
                             {
                                 failureMsg = "Response is null";
@@ -1519,7 +1559,7 @@ namespace ZoomMeetingBotSDK
                     hostApp.Log(LogType.ERR, "No ChatBot was able to produce a response");
                 }
 
-                response = FormatChatResponse(response, from.name);
+                response = FormatChatResponse(response, from.Name);
                 if (Controller.SendChatMessage(replyTo, response) && speak)
                 {
                     var ttsText = ScrubTTS(response);
@@ -1543,7 +1583,7 @@ namespace ZoomMeetingBotSDK
             }
 
             // Determine if sender is admin or not
-            GoodUsers.TryGetValue(CleanUserName(e.from.name), out bool bAdmin);
+            GoodUsers.TryGetValue(CleanUserName(e.from.Name), out bool bAdmin);
 
             // Non-priviledged retrival of topic
             if ((!bAdmin) && (text == "/topic"))
@@ -1738,6 +1778,27 @@ namespace ZoomMeetingBotSDK
                 return;
             }
 
+            if (sCommand == "ids")
+            {
+                string arg = sTarget.ToLower().Trim();
+                bool newModeBool = (arg == "on" || arg == "enabled");
+                string newModeStr = newModeBool ? "on" : "off";
+
+
+                var response = string.Empty;
+                if (newModeBool != cfg.IncludeUserIdsInLists)
+                {
+                    response = $"IncludeUserIdsInLists has been turned {newModeStr}";
+                    cfg.IncludeUserIdsInLists = newModeBool;
+                }
+                else
+                {
+                    response = $"IncludeUserIdsInLists is already {newModeStr}";
+                }
+
+                _ = Controller.SendChatMessage(replyTo, response);
+            }
+
             if (sCommand == "waitmsg")
             {
                 var sWaitMsg = sTarget.Trim();
@@ -1839,27 +1900,30 @@ namespace ZoomMeetingBotSDK
 
                 if ((arg == "off") || (arg == "stop") || (arg == "disable"))
                 {
-                    if (trackers.ContainsKey(from.userId))
+                    lock (trackers)
                     {
-                        trackers.Remove(from.userId);
-                        response = $"Tracking disabled";
-                    }
-                    else
-                    {
-                        response = $"Tracking is not enabled";
+                        if (trackers.ContainsKey(from.UserId))
+                        {
+                            trackers.Remove(from.UserId);
+                            response = $"Tracking disabled";
+                        }
+                        else
+                        {
+                            response = $"Tracking is not enabled";
+                        }
                     }
                 }
                 else if ((arg == "hand") || (arg == "hands"))
                 {
-                    response = EnableTracking(from.userId, "hands");
+                    response = EnableTracking(from.UserId, "hands");
                 }
                 else if ((arg == "talking") || (arg == "talkers") || (arg == "talk") || (arg == "activeaudio") || (arg == "audio"))
                 {
-                    response = EnableTracking(from.userId, "talkers");
+                    response = EnableTracking(from.UserId, "talkers");
                 }
                 else if ((arg == "chat") || (arg == "chats"))
                 {
-                    response = EnableTracking(from.userId, "chat");
+                    response = EnableTracking(from.UserId, "chat");
                 }
                 else
                 {
@@ -1903,7 +1967,7 @@ namespace ZoomMeetingBotSDK
             // All of the following require a participant target
 
             // Make sure I'm not the target :p
-            if (target.isMe)
+            if (target.IsMe)
             {
                 _ = Controller.SendChatMessage(replyTo, "U Can't Touch This\n* MC Hammer Music *\nhttps://youtu.be/otCpCn0l4Wo");
                 return;
@@ -1914,71 +1978,71 @@ namespace ZoomMeetingBotSDK
             // TBD: Can you rename someone in the waiting room using the SDK?
             if (newName != null)
             {
-                if (target.name == from.name)
+                if (target.Name == from.Name)
                 {
                     _ = Controller.SendChatMessage(replyTo, "Why don't you just rename yourself?");
                     return;
                 }
 
                 var success = Controller.RenameParticipant(target, newName);
-                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully renamed" : "Failed to rename")} {repr(target.name)} to {repr(newName)}");
+                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully renamed" : "Failed to rename")} {repr(target.Name)} to {repr(newName)}");
 
                 return;
             }
 
             if (sCommand == "admit")
             {
-                if (target.status != Controller.ParticipantStatus.Waiting)
+                if (target.Status != Controller.ParticipantStatus.Waiting)
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.name)} is not in the waiting room");
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.Name)} is not in the waiting room");
                 }
                 else
                 {
                     var success = Controller.AdmitParticipant(target);
-                    _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully admitted" : "Failed to admit")} {repr(target.name)}");
+                    _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully admitted" : "Failed to admit")} {repr(target.Name)}");
                 }
 
                 return;
             }
 
             // Commands after here require the participant to be attending
-            if (target.status != Controller.ParticipantStatus.Attending)
+            if (target.Status != Controller.ParticipantStatus.Attending)
             {
-                _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.name)} is not attending");
+                _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.Name)} is not attending");
                 return;
             }
 
             if ((sCommand == "cohost") || (sCommand == "promote"))
             {
-                if (target.isHost || target.isCoHost)
+                if (target.IsHost || target.IsCoHost)
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.name)} is already Host or Co-Host so cannot be promoted");
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.Name)} is already Host or Co-Host so cannot be promoted");
                     return;
                 }
-                else if (!target.isVideoOn)
+                else if (!target.IsVideoOn)
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"Sorry, I'm not allowed to Co-Host {repr(target.name)} because their video is off");
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, I'm not allowed to Co-Host {repr(target.Name)} because their video is off");
                     return;
                 }
 
                 var success = Controller.PromoteParticipant(target, Controller.ParticipantRole.CoHost);
-                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully promoted" : "Failed to promote")} {repr(target.name)}");
+                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully promoted" : "Failed to promote")} {repr(target.Name)}");
 
                 return;
             }
 
             if (sCommand == "demote")
             {
-                if (!target.isCoHost)
+                if (!target.IsCoHost)
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.name)} isn't Co-Host so they cannot be demoted");
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.Name)} isn't Co-Host so they cannot be demoted");
                     return;
                 }
 
                 // Tag this as a bad user so we don't automatically cohost again
-                BadUsers[target.userId] = CleanUserName(target.name);
+                BadUsers[target.UserId] = target.Name;
 
-                _ = Controller.SendChatMessage(replyTo, $"{(Controller.DemoteParticipant(target) ? "Successfully demoted" : "Failed to demote")} {repr(target.name)}");
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.DemoteParticipant(target) ? "Successfully demoted" : "Failed to demote")} {repr(target.Name)}");
                 return;
             }
 
@@ -1986,32 +2050,32 @@ namespace ZoomMeetingBotSDK
             {
                 // TBD: Add /force option so that they cannot unmute
 
-                _ = Controller.SendChatMessage(replyTo, $"{(Controller.MuteParticipant(target) ? "Successfully muted" : "Failed to mute")} {repr(target.name)}");
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.MuteParticipant(target) ? "Successfully muted" : "Failed to mute")} {repr(target.Name)}");
                 return;
             }
 
             if (sCommand == "unmute")
             {
-                _ = Controller.SendChatMessage(replyTo, $"{(Controller.UnmuteParticipant(target) ? "Successfully unmuted" : "Failed to unmute")} {repr(target.name)}");
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.UnmuteParticipant(target) ? "Successfully unmuted" : "Failed to unmute")} {repr(target.Name)}");
                 return;
             }
 
             if ((sCommand == "expel") || (sCommand == "kick"))
             {
-                _ = Controller.SendChatMessage(replyTo, $"{(Controller.ExpelParticipant(target) ? "Successfully expelled" : "Failed to expel")} {repr(target.name)}");
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.ExpelParticipant(target) ? "Successfully expelled" : "Failed to expel")} {repr(target.Name)}");
 
                 // Tag this as a bad user so we don't automatically re-admit
-                BadUsers[target.userId] = CleanUserName(target.name);
+                BadUsers[target.UserId] = target.Name;
 
                 return;
             }
 
             if ((sCommand == "wait") || (sCommand == "putwr") || (sCommand == "waitroom") || (sCommand == "waitingroom") || (sCommand == "putinwait") || (sCommand == "putinwaiting") || (sCommand == "putinwaitingroom"))
             {
-                _ = Controller.SendChatMessage(replyTo, $"{(Controller.PutParticipantInWaitingRoom(target) ? "Successfully put" : "Failed to put")} {repr(target.name)} in waiting room");
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.PutParticipantInWaitingRoom(target) ? "Successfully put" : "Failed to put")} {repr(target.Name)} in waiting room");
 
                 // Tag this as a bad user so we don't automatically re-admit
-                BadUsers[target.userId] = CleanUserName(target.name);
+                BadUsers[target.UserId] = target.Name;
 
                 return;
             }
