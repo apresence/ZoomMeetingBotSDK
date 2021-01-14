@@ -10,6 +10,7 @@ namespace ZoomMeetingBotSDK
     using System.Linq;
     using System.Reflection;
     using System.Runtime.CompilerServices;
+    using System.Text;
     using System.Text.RegularExpressions;
     using System.Threading;
 
@@ -29,6 +30,12 @@ namespace ZoomMeetingBotSDK
         private static string speaker = null;
 
         private static IHostApp hostApp;
+
+        /// <summary>
+        /// This is a list of userIDs and names that we have kicked, banned, etc. for the meeting.  We use this to
+        /// prevent re-admitting/co-hosting etc. bad actors.
+        /// </summary>
+        private static readonly Dictionary<uint, string> BadUsers = new Dictionary<uint, string>();
 
         private static readonly Dictionary<string, bool> GoodUsers = new Dictionary<string, bool>();
         private static readonly object _lock_eh = new object();
@@ -288,6 +295,11 @@ namespace ZoomMeetingBotSDK
 
         public static bool SendTopic(Controller.Participant recipient, bool useDefault = true)
         {
+            if (recipient.isPurePhoneUser)
+            {
+                return false;
+            }
+
             var topic = GetTopic(useDefault);
 
             if (topic == null)
@@ -698,7 +710,71 @@ namespace ZoomMeetingBotSDK
 
         private static string FormatChatResponse(string text, string to)
         {
-            return string.Format(text, GetFirstName(to), GetDayTime());
+            StringBuilder ret = new StringBuilder();
+            StringBuilder accum = null;
+
+            foreach (var ch in text)
+            {
+                switch (ch)
+                {
+                    case '{':
+                        if (accum != null)
+                        {
+                            throw new FormatException($"Cannot have open brace inside braces: {repr(text)}");
+                        }
+
+                        accum = new StringBuilder();
+
+                        break;
+                    case '}':
+                        if (accum == null)
+                        {
+                            throw new FormatException($"Cannot have close brace without open brace: {repr(text)}");
+                        }
+
+                        // TBD: Could load all of this into a Dictionary<string, string> ...
+                        string key = accum.ToString();
+                        string val = null;
+                        if (key == "0")
+                        {
+                            val = GetFirstName(to);
+                        }
+                        else if (key == "1")
+                        {
+                            val = GetDayTime();
+                        }
+                        else
+                        {
+                            if (cfg.BroadcastCommands != null)
+                            {
+                                cfg.BroadcastCommands.TryGetValue(key, out val);
+                            }
+                        }
+
+                        if (val == null)
+                        {
+                            throw new ArgumentException($"Variable {key} could not be resolved: {repr(text)}");
+                        }
+
+                        ret.Append(val);
+                        accum = null;
+
+                        break;
+                    default:
+                        if (accum != null)
+                        {
+                            accum.Append(ch);
+                        }
+                        else
+                        {
+                            ret.Append(ch);
+                        }
+
+                        break;
+                }
+            }
+
+            return ret.ToString();
         }
 
         private static readonly Dictionary<uint, string> DicOneTimeHis = new Dictionary<uint, string>();
@@ -1085,6 +1161,7 @@ namespace ZoomMeetingBotSDK
         {
             var bAdmitKnown = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitKnown) != 0;
             var bAdmitOthers = (cfg.BotAutomationFlags & BotAutomationFlag.AdmitOthers) != 0;
+            var waitMsg = String.Empty;
 
             if (p.isMe || (!bAdmitKnown && !bAdmitOthers))
             {
@@ -1093,9 +1170,28 @@ namespace ZoomMeetingBotSDK
             }
 
             var sCleanName = CleanUserName(p.name);
+
+            waitMsg = $"BOT Not admitting {p} : BAD USER";
+            if (BadUsers.ContainsKey(p.userId) || BadUsers.Values.Contains(sCleanName))
+            {
+                // Make sure we don't display the message more than once
+                if (!HsParticipantMessages.Contains(waitMsg))
+                {
+                    hostApp.Log(LogType.INF, waitMsg);
+                    HsParticipantMessages.Add(waitMsg);
+                }
+
+                return false;
+            }
+
+            if (HsParticipantMessages.Contains(waitMsg))
+            {
+                HsParticipantMessages.Remove(waitMsg);
+            }
+
             if (GoodUsers.ContainsKey(sCleanName) && bAdmitKnown)
             {
-                hostApp.Log(LogType.INF, "BOT Admitting {0} : KNOWN", repr(p.name));
+                hostApp.Log(LogType.INF, "BOT Admitting {p} : KNOWN");
                 return Controller.AdmitParticipant(p);
             }
 
@@ -1120,7 +1216,7 @@ namespace ZoomMeetingBotSDK
             dtWhenToAdmit = dtLastAdmission.AddSeconds(cfg.UnknownParticipantWaitSecs);
             bAdmit = dtNow >= dtWhenToAdmit;
 
-            string waitMsg = $"BOT Admit {p} : Unknown participant waiting room time reached";
+            waitMsg = $"BOT Admit {p} : Unknown participant waiting room time reached";
             if (bAdmit)
             {
                 waitMsg += " : Admitting";
@@ -1163,13 +1259,32 @@ namespace ZoomMeetingBotSDK
                 return false;
             }
 
-            string cleanName = CleanUserName(p.name);
+            var cleanName = CleanUserName(p.name);
+
             GoodUsers.TryGetValue(cleanName, out bool bUserShouldBeCoHost);
 
             if (!bUserShouldBeCoHost)
             {
                 // Nothing to do
                 return false;
+            }
+
+            var msg = $"BOT Not co-hosting {p} : BAD USER";
+            if (BadUsers.ContainsKey(p.userId) || BadUsers.Values.Contains(cleanName))
+            {
+                // Make sure we don't display the message more than once
+                if (!HsParticipantMessages.Contains(msg))
+                {
+                    hostApp.Log(LogType.INF, msg);
+                    HsParticipantMessages.Add(msg);
+                }
+
+                return false;
+            }
+
+            if (HsParticipantMessages.Contains(msg))
+            {
+                HsParticipantMessages.Remove(msg);
             }
 
             if ((!Controller.me.isHost) && (!Controller.me.isCoHost))
@@ -1189,7 +1304,7 @@ namespace ZoomMeetingBotSDK
             // Send the topic if configured to do so
             if ((cfg.BotAutomationFlags & BotAutomationFlag.SendTopicOnJoin) != 0)
             {
-                SendTopic(p, false);
+                _ = SendTopic(p, false);
             }
 
             PromoteIfNeeded(p);
@@ -1246,6 +1361,38 @@ namespace ZoomMeetingBotSDK
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Pre-processes TTS text, removing excessive or illegible things such as email addresses, web pages, etc.
+        /// </summary>
+        private static string ScrubTTS(string text)
+        {
+            var lines = text.GetLines();
+            var ret = new List<string>();
+            var badTexts = new string[] { "@", "http", "Forecast" };
+
+            foreach (var line in lines)
+            {
+                var done = false;
+                foreach (var badText in badTexts)
+                {
+                    if (line.Contains(badText))
+                    {
+                        done = true;
+                        break;
+                    }
+                }
+
+                if (done)
+                {
+                    break;
+                }
+
+                ret.Add(line.Trim());
+            }
+
+            return string.Join("\n", ret);
         }
 
         private void Controller_OnChatMessageReceive(object sender, Controller.OnChatMessageReceiveArgs e)
@@ -1329,7 +1476,7 @@ namespace ZoomMeetingBotSDK
                 {
                     if (FastRegex.IsMatch(text, $"\\b(topic|reading)\\b", RegexOptions.IgnoreCase))
                     {
-                        SendTopic(replyTo, true);
+                        _ = SendTopic(replyTo, true);
                         return;
                     }
                 }
@@ -1372,7 +1519,11 @@ namespace ZoomMeetingBotSDK
                 response = FormatChatResponse(response, from.name);
                 if (Controller.SendChatMessage(replyTo, response) && speak)
                 {
-                    Sound.Speak(response);
+                    var ttsText = ScrubTTS(response);
+                    if (ttsText.Length != 0)
+                    {
+                        Sound.Speak(ttsText);
+                    }
                 }
 
                 return;
@@ -1451,7 +1602,7 @@ namespace ZoomMeetingBotSDK
             {
                 if (sTarget == null)
                 {
-                    SendTopic(replyTo, true);
+                    _ = SendTopic(replyTo, true);
                     return;
                 }
 
@@ -1821,13 +1972,8 @@ namespace ZoomMeetingBotSDK
                     return;
                 }
 
-                // If the target is in the good users list as an admin, go ahead and clear the admin flag them so we don't promote them again automatically
-                // NOTE: This will be foiled if the good users file is updated and reloaded; But that isn't likely to happen ...
-                var cleanUserName = CleanUserName(target.name);
-                if (GoodUsers.TryGetValue(cleanUserName, out bool bIsAdmin) && bIsAdmin)
-                {
-                    GoodUsers[cleanUserName] = false;
-                }
+                // Tag this as a bad user so we don't automatically cohost again
+                BadUsers[target.userId] = CleanUserName(target.name);
 
                 _ = Controller.SendChatMessage(replyTo, $"{(Controller.DemoteParticipant(target) ? "Successfully demoted" : "Failed to demote")} {repr(target.name)}");
                 return;
@@ -1850,19 +1996,20 @@ namespace ZoomMeetingBotSDK
             if ((sCommand == "expel") || (sCommand == "kick"))
             {
                 _ = Controller.SendChatMessage(replyTo, $"{(Controller.ExpelParticipant(target) ? "Successfully expelled" : "Failed to expel")} {repr(target.name)}");
+
+                // Tag this as a bad user so we don't automatically re-admit
+                BadUsers[target.userId] = CleanUserName(target.name);
+
                 return;
             }
 
             if ((sCommand == "wait") || (sCommand == "putwr") || (sCommand == "waitroom") || (sCommand == "waitingroom") || (sCommand == "putinwait") || (sCommand == "putinwaiting") || (sCommand == "putinwaitingroom"))
             {
-                // Remove user from good users so they don't get auto-admitted again
-                var cleanUserName = CleanUserName(target.name);
-                if (GoodUsers.TryGetValue(cleanUserName, out _))
-                {
-                    GoodUsers.Remove(cleanUserName);
-                }
-
                 _ = Controller.SendChatMessage(replyTo, $"{(Controller.PutParticipantInWaitingRoom(target) ? "Successfully put" : "Failed to put")} {repr(target.name)} in waiting room");
+
+                // Tag this as a bad user so we don't automatically re-admit
+                BadUsers[target.userId] = CleanUserName(target.name);
+
                 return;
             }
 

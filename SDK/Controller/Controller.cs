@@ -343,7 +343,7 @@ namespace ZoomMeetingBotSDK
 
         public static void Zoom_OnUserJoin(uint[] lstUserID)
         {
-            //hostApp.Log(LogType.DBG, $"userJoin ids={repr(lstUserID)}");
+            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} ids={repr(lstUserID)}");
 
             foreach (var userId in lstUserID)
             {
@@ -358,7 +358,7 @@ namespace ZoomMeetingBotSDK
 
         public static void Zoom_OnUserLeft(uint[] lstUserID)
         {
-            hostApp.Log(LogType.DBG, $"userLeft ids={repr(lstUserID)}");
+            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} ids={repr(lstUserID)}");
 
             lock (participants)
             {
@@ -366,6 +366,12 @@ namespace ZoomMeetingBotSDK
                 {
                     if (!GetParticipantById(userId, out Participant p))
                     {
+                        continue;
+                    }
+
+                    if (p.status != ParticipantStatus.Attending)
+                    {
+                        hostApp.Log(LogType.WRN, $"{MethodBase.GetCurrentMethod().Name} Participant {p} status is {p.status}, not Attending");
                         continue;
                     }
 
@@ -468,9 +474,15 @@ namespace ZoomMeetingBotSDK
             */
         }
 
+        /// <summary>
+        /// Handle waiting room join event from SDK.
+        /// NOTE:
+        /// - When a user leaves the waiting room and joins the meeting, their userId changes.
+        /// - When a user leaves the meeting (due to being put in the waiting room), their userId stays the same.  Weird.
+        /// </summary>
         public static void Zoom_OnWatingRoomUserJoin(uint userId)
         {
-            hostApp.Log(LogType.DBG, $"waitingRoomUserJoin id={userId}");
+            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} id={userId}");
             var p = UpdateParticipant(userId, true);
             OnParticipantJoinWaitingRoom(null, new OnParticipantJoinWaitingRoomArgs()
             {
@@ -481,10 +493,15 @@ namespace ZoomMeetingBotSDK
         public static void Zoom_OnWatingRoomUserLeft(uint userId)
         {
             // NOTE: Interestingly, when a user leaves the waiting room and joins the meeting room, the userId changes!
-            hostApp.Log(LogType.DBG, $"waitingRoomUserLeft id={userId}");
+            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} id={userId}");
 
             if (!GetParticipantById(userId, out Participant p))
             {
+                return;
+            }
+
+            if ((p.status != ParticipantStatus.Waiting) && (p.status != ParticipantStatus.Joining)) {
+                hostApp.Log(LogType.WRN, $"{MethodBase.GetCurrentMethod().Name} Participant {p} is {p.status}, not Waiting or Joining");
                 return;
             }
 
@@ -815,7 +832,14 @@ namespace ZoomMeetingBotSDK
             }
 
             lock (participants) {
-                if (!participants.ContainsKey(userId))
+                if (participants.TryGetValue(userId, out Participant existing))
+                {
+                    if (p.status != existing.status)
+                    {
+                        hostApp.Log(LogType.INF, $"Participant {p} changed from {existing.status} to {p.status}");
+                    }
+                }
+                else
                 {
                     hostApp.Log(LogType.INF, $"Participant {p} joined the {(waiting ? "waiting room" : "meeting")}");
                 }
@@ -1026,12 +1050,14 @@ namespace ZoomMeetingBotSDK
                 }
 
                 // TBD: There has to be a better way to do this ...
+                hostApp.Log(LogType.DBG, $"Waiting for meeting to start");
                 while ((StartingMeeting) && (!ShouldExit))
                 {
                     Application.DoEvents();
                     Thread.Sleep(250);
                 }
 
+                hostApp.Log(LogType.DBG, $"Determining if meeting is already in progress or not");
                 lock (participants)
                 {
                     // Some control bots need to know if we started the meeting or joined a meeting already in progress.
@@ -1049,8 +1075,10 @@ namespace ZoomMeetingBotSDK
                     ZoomAlreadyRunning = numAttending > 1;
                 }
 
+                hostApp.Log(LogType.DBG, $"Signalling meeting started");
                 StartCompleteEvent.Set();
 
+                hostApp.Log(LogType.DBG, $"Entering action loop");
                 var nextActionDT = DateTime.MinValue;
                 while (!ShouldExit)
                 {
@@ -1075,6 +1103,7 @@ namespace ZoomMeetingBotSDK
                 }
             });
 
+            hostApp.Log(LogType.DBG, $"Waiting for meeting started signal");
             StartCompleteEvent.WaitOne();
 
             hostApp.Log(LogType.INF, "Controller start successful");
@@ -1119,7 +1148,6 @@ namespace ZoomMeetingBotSDK
         {
             List<Participant> ret = new List<Participant>();
 
-            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} participants ENTER");
             lock (participants)
             {
                 foreach (var p in participants.Values)
@@ -1130,7 +1158,6 @@ namespace ZoomMeetingBotSDK
                     }
                 }
             }
-            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} participants EXIT");
 
             return ret;
         }
@@ -1307,6 +1334,7 @@ namespace ZoomMeetingBotSDK
                 lock (participants)
                 {
                     // Admitting a participant takes several seconds; Mark them as Joining so that we don't try to admit them again
+                    hostApp.Log(LogType.INF, $"Participant {p} is joining the meeting");
                     p.status = ParticipantStatus.Joining;
                 }
 

@@ -65,7 +65,7 @@
             if (randomTalk != null)
             {
                 response = randomTalk.RandomElement();
-            }            
+            }
 
             return response;
         }

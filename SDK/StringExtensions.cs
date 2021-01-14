@@ -86,6 +86,14 @@
         /// </summary>
         public static string StripBlankLinesAndTrimSpace(this string s)
         {
+            return string.Join("\n", GetLines(s));
+        }
+
+        /// <summary>
+        /// Strips leading/trailing from each line and removes blank lines from multi-line strings. Normalizes line delimiter to a carriage return. Returns lines as string array.
+        /// </summary>
+        public static string[] GetLines(this string s)
+        {
             var lines = s.Split(CRLFDelim);
             var ret = new List<string>();
             foreach (var line in lines)
@@ -96,7 +104,8 @@
                     ret.Add(temp);
                 }
             }
-            return string.Join("\n", ret);
+
+            return ret.ToArray();
         }
     }
 }
