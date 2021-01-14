@@ -1853,7 +1853,7 @@ namespace ZoomMeetingBotSDK
                 return;
             }
 
-            if ((sCommand == "wait") || (sCommand == "waitroom") || (sCommand == "waitingroom") || (sCommand == "putinwait") || (sCommand == "putinwaiting") || (sCommand == "putinwaitingroom"))
+            if ((sCommand == "wait") || (sCommand == "putwr") || (sCommand == "waitroom") || (sCommand == "waitingroom") || (sCommand == "putinwait") || (sCommand == "putinwaiting") || (sCommand == "putinwaitingroom"))
             {
                 // Remove user from good users so they don't get auto-admitted again
                 var cleanUserName = CleanUserName(target.name);
