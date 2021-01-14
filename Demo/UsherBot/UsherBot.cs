@@ -749,6 +749,8 @@ namespace ZoomMeetingBotSDK
 
                 hostApp.Log(LogType.INF, "Allowing participants to unmute themselves");
                 _ = Controller.SetAllowParticipantsToUnmuteSelf(true);
+
+                speaker = null;
                 return;
             }
 
@@ -791,6 +793,7 @@ namespace ZoomMeetingBotSDK
             }
 
             _ = Controller.SendChatMessage(from, $"Speaker set to {newSpeaker}");
+            speaker = newSpeaker.name;
         }
 
         private static List<IChatBot> chatBots = null;
@@ -1251,6 +1254,7 @@ namespace ZoomMeetingBotSDK
             var from = e.from;
             var text = e.text;
             var isToEveryone = e.isToEveryone;
+            var isPrivate = !isToEveryone;
 
             // TBD: All of this parsing is really messy. It could use a re-write!
 
@@ -1264,16 +1268,13 @@ namespace ZoomMeetingBotSDK
             // TBD: Folks in the waiting room can throw this out. Really should count # of actual attendees
             var onlyTwoAttendees = Controller.participants.Count == 2;
 
-            // Consider it private if it's not to everyone or if there are only two people in the meeting
-            var isPrivate = isToEveryone ? onlyTwoAttendees : true;
-
             Controller.Participant replyTo = null;
             if (isToEveryone)
             {
                 // If there are only two people in the meeting, isPrivate=true and we can assume they are talking to the bot.
                 //   If there is more than one person in the meeting, isPrivate=false and we check for the bot's name so we can be sure they are talking to it.
                 var withoutMyName = Regex.Replace(text, @"\b" + cfg.MyParticipantName + @"\b", string.Empty, RegexOptions.IgnoreCase);
-                if ((withoutMyName == text) && (!isPrivate))
+                if ((withoutMyName == text) && (!onlyTwoAttendees))
                 {
                     return;
                 }
@@ -1381,6 +1382,12 @@ namespace ZoomMeetingBotSDK
             // Handle non-priviledged commands
             // ====
 
+            if (!isPrivate)
+            {
+                // Ignore commands outside of private messages
+                return;
+            }
+
             // Determine if sender is admin or not
             GoodUsers.TryGetValue(CleanUserName(e.from.name), out bool bAdmin);
 
@@ -1398,6 +1405,7 @@ namespace ZoomMeetingBotSDK
             // Only allow admin users to run priviledged commands
             if (!bAdmin)
             {
+                _ = Controller.SendChatMessage(replyTo, $"Sorry, you are not authorized to run that command.");
                 hostApp.Log(LogType.WRN, $"Ignoring command {repr(text)} from non-admin {from}");
                 return;
             }

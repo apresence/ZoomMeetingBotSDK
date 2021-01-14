@@ -1124,7 +1124,10 @@ namespace ZoomMeetingBotSDK
             {
                 foreach (var p in participants.Values)
                 {
-                    ret.Add(p);
+                    if (p.name == name)
+                    {
+                        ret.Add(p);
+                    }
                 }
             }
             hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} participants EXIT");
