@@ -1344,7 +1344,7 @@ namespace ZoomMeetingBotSDK
             return $"Tracking of {trackingItem} {(bEnabled ? "is already enabled" : "enabled")}";
         }
 
-        private static void NotifyTrackers(string item, string value)
+        private static void NotifyTrackers(string item, string value, uint dontSendToUserId = 0)
         {
             foreach (var tracker in trackers)
             {
@@ -1357,7 +1357,10 @@ namespace ZoomMeetingBotSDK
                     }
                     else
                     {
-                        _ = Controller.SendChatMessage(p, $"{item.UppercaseFirst()}: {(value.Length == 0 ? "None" : value)}");
+                        if ((dontSendToUserId == 0) || (dontSendToUserId != tracker.Key))
+                        {
+                            _ = Controller.SendChatMessage(p, $"{item.UppercaseFirst()}: {(value.Length == 0 ? "None" : value)}");
+                        }
                     }
                 }
             }
@@ -1433,7 +1436,7 @@ namespace ZoomMeetingBotSDK
             else
             {
                 replyTo = from;
-                NotifyTrackers("chat", $"(from {from}) {text}");
+                NotifyTrackers("chat", $"(from {from}) {text}", from.userId);
 
                 // Currently the SDK only sends events for chats sent to everyone or sent to me, but it's possible that may change in the future.
                 //   We do a sanity check here to make sure we don't respond to messages sent to other participants
