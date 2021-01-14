@@ -147,6 +147,12 @@ namespace ZoomMeetingBotSDK
             programSettings = DeserializeJson<ProgramSettings>(hostApp.GetSettingsAsJSON());
             WaitDebuggerAttach();
 
+            usherBot = new UsherBot();
+            usherBot.Init(new ControlBot.ControlBotInitParam()
+            {
+                hostApp = hostApp,
+            });
+
             if (Array.IndexOf(args, "/protect") != -1)
             {
                 Console.WriteLine("Unprotected Value:");
@@ -284,12 +290,6 @@ namespace ZoomMeetingBotSDK
             {
                 try
                 {
-                    usherBot = new UsherBot();
-                    usherBot.Init(new ControlBot.ControlBotInitParam()
-                    {
-                        hostApp = hostApp,
-                    });
-
                     if (programSettings.PromptOnStartup)
                     {
                         Console.WriteLine("Press ENTER to proceed");

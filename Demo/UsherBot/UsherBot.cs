@@ -1068,9 +1068,6 @@ namespace ZoomMeetingBotSDK
             LoadSettings();
 
             hostApp.SettingsChanged += new EventHandler(SettingsChanged);
-
-            Controller.Init(hostApp);
-            Sound.Init(hostApp);
         }
 
         /// <summary>
@@ -1094,6 +1091,9 @@ namespace ZoomMeetingBotSDK
 
         public void Start()
         {
+            Controller.Init(hostApp);
+            Sound.Init(hostApp);
+
             if ((cfg.BotAutomationFlags & BotAutomationFlag.Converse) != 0)
             {
                 chatBots = GetChatBots();
