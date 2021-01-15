@@ -410,13 +410,13 @@ namespace ZoomMeetingBotSDK
             DateTime dtNow = DateTime.UtcNow;
 
             // Get a safe copy of participant list
-            List<Controller.Participant> participants = null;
+            List<Controller.Participant> plist = null;
             lock (Controller.participants)
             {
-                participants = Controller.participants.Values.ToList<Controller.Participant>();
+                plist = Controller.participants.Values.ToList<Controller.Participant>();
             }
 
-            foreach (Controller.Participant p in participants)
+            foreach (Controller.Participant p in plist)
             {
                 // Skip over my own participant record; We handled that earlier.  Also, skip over anyone not in the waiting room
                 if (p.IsMe)
@@ -488,7 +488,7 @@ namespace ZoomMeetingBotSDK
             if ((!Controller.ZoomAlreadyRunning) && (FirstParticipantGreeted == null) && (numAttending > 0))
             {
                 // Looking for a participant that is not me, is using computer audio, and is a known good user
-                var idx = participants.FindIndex(x => (
+                var idx = plist.FindIndex(x => (
                     (!x.IsMe) &&
                     (x.Status == Controller.ParticipantStatus.Attending) &&
                     (x.audioDevice == Controller.ControllerAudioType.AUDIOTYPE_VOIP) &&
@@ -496,8 +496,8 @@ namespace ZoomMeetingBotSDK
                 ));
                 if (idx != -1)
                 {
-                    FirstParticipantGreeted = participants[idx].Name;
-                    var msg = FormatChatResponse(OneTimeHi("morning", participants[idx]), FirstParticipantGreeted);
+                    FirstParticipantGreeted = plist[idx].Name;
+                    var msg = FormatChatResponse(OneTimeHi("morning", plist[idx]), FirstParticipantGreeted);
 
                     Sound.Play("bootup");
                     Thread.Sleep(3000);
@@ -1384,7 +1384,7 @@ namespace ZoomMeetingBotSDK
         {
             lock (trackers)
             {
-                foreach (var tracker in trackers)
+                foreach (var tracker in trackers.ToList())
                 {
                     if (tracker.Value.Contains(item))
                     {

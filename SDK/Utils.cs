@@ -141,10 +141,10 @@
                 return;
             }
             
-            string[] keys = new string[dic.Count];
-            dic.Keys.CopyTo(keys, 0);
+            //string[] keys = new string[dic.Count];
+            //dic.Keys.CopyTo(keys, 0);
 
-            foreach (string key in keys)
+            foreach (string key in dic.Keys.ToList())
             {
                 var a = key.Split('|');
 
