@@ -1084,67 +1084,90 @@ namespace ZoomMeetingBotSDK
                 try
                 {
                     BeginLoginSequence();
+
+                    // TBD: There has to be a better way to do this ...
+                    hostApp.Log(LogType.DBG, $"Waiting for meeting to start");
+                    while ((StartingMeeting) && (!ShouldExit))
+                    {
+                        Application.DoEvents();
+                        Thread.Sleep(250);
+                    }
+
+                    hostApp.Log(LogType.DBG, $"Determining if meeting is already in progress or not");
+                    lock (participants)
+                    {
+                        // Some control bots need to know if we started the meeting or joined a meeting already in progress.
+                        //   TBD: I don't immediately see a way to access this info via the API, but if we're the only participant
+                        //   attending the meeting (vs in the waiting room), then it's probably safe to assume we started it.
+                        int numAttending = 0;
+                        foreach (var p in participants.Values)
+                        {
+                            if (p.Status == ParticipantStatus.Attending)
+                            {
+                                numAttending++;
+                            }
+                        }
+
+                        ZoomAlreadyRunning = numAttending > 1;
+                    }
+
+                    hostApp.Log(LogType.DBG, $"Signalling meeting started");
+                    StartCompleteEvent.Set();
                 }
                 catch (Exception ex)
                 {
-                    hostApp.Log(LogType.ERR, $"Controller failed to start: {ex}");
+                    hostApp.Log(LogType.ERR, $"[Controller] Failed to start: {ex}");
                     StartingMeeting = false;
                     OnExit(null, null);
+                    return;
                 }
 
-                // TBD: There has to be a better way to do this ...
-                hostApp.Log(LogType.DBG, $"Waiting for meeting to start");
-                while ((StartingMeeting) && (!ShouldExit))
+                try
                 {
-                    Application.DoEvents();
-                    Thread.Sleep(250);
-                }
-
-                hostApp.Log(LogType.DBG, $"Determining if meeting is already in progress or not");
-                lock (participants)
-                {
-                    // Some control bots need to know if we started the meeting or joined a meeting already in progress.
-                    //   TBD: I don't immediately see a way to access this info via the API, but if we're the only participant
-                    //   attending the meeting (vs in the waiting room), then it's probably safe to assume we started it.
-                    int numAttending = 0;
-                    foreach (var p in participants.Values)
+                    hostApp.Log(LogType.DBG, $"Entering action loop");
+                    var nextActionDT = DateTime.MinValue;
+                    while (!ShouldExit)
                     {
-                        if (p.Status == ParticipantStatus.Attending)
+                        try
                         {
-                            numAttending++;
+                            Application.DoEvents();
+                            Thread.Sleep(100);
                         }
-                    }
-
-                    ZoomAlreadyRunning = numAttending > 1;
-                }
-
-                hostApp.Log(LogType.DBG, $"Signalling meeting started");
-                StartCompleteEvent.Set();
-
-                hostApp.Log(LogType.DBG, $"Entering action loop");
-                var nextActionDT = DateTime.MinValue;
-                while (!ShouldExit)
-                {
-                    Application.DoEvents();
-                    Thread.Sleep(100);
-
-                    // This has to fire from the same thread for the SDK to work
-                    var nowDT = DateTime.UtcNow;
-                    if (nowDT >= nextActionDT)
-                    {
-                        var rateInMS = cfg.ActionTimerRateInMS;
-                        nextActionDT = nowDT.AddMilliseconds(rateInMS);
-
-                        OnActionTimerTick(null, null);
-
-                        var execTimeInMS = DateTime.UtcNow.Subtract(nowDT).TotalMilliseconds;
-                        if (execTimeInMS > rateInMS)
+                        catch (Exception ex)
                         {
-                            hostApp.Log(LogType.WRN, $"OnActionTimerTick lagging {(int)(execTimeInMS - rateInMS)}ms");
+                            hostApp.Log(LogType.ERR, $"[Controller] Exception in inner action loop message pump: {ex}");
                         }
 
-                        UpdateParticipantActiveAudio();
+                        try
+                        {
+                            // This has to fire from the same thread for the SDK to work
+                            var nowDT = DateTime.UtcNow;
+                            if (nowDT >= nextActionDT)
+                            {
+                                var rateInMS = cfg.ActionTimerRateInMS;
+                                nextActionDT = nowDT.AddMilliseconds(rateInMS);
+
+                                OnActionTimerTick(null, null);
+
+                                var execTimeInMS = DateTime.UtcNow.Subtract(nowDT).TotalMilliseconds;
+                                if (execTimeInMS > rateInMS)
+                                {
+                                    hostApp.Log(LogType.WRN, $"OnActionTimerTick lagging {(int)(execTimeInMS - rateInMS)}ms");
+                                }
+
+                                UpdateParticipantActiveAudio();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            hostApp.Log(LogType.ERR, $"[Controller] Exception in inner action loop: {ex}");
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    hostApp.Log(LogType.ERR, $"[Controller] Exception in outer action loop: {ex}");
+                    OnExit(null, null);
                 }
             });
 
