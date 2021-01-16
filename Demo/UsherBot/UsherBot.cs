@@ -111,7 +111,7 @@ namespace ZoomMeetingBotSDK
                 WaitingRoomAnnouncementMessage = null;
                 WaitingRoomAnnouncementDelaySecs = 60;
                 IncludeUserIdsInLists = false;
-                OneTimeMsg = "I'm just a Bot. If you need something, please speak to one of the Co-Hosts.";
+                OneTimeMsg = "I'm just a Bot. If you need something, please chat with one of the Co-Hosts.";
             }
 
             /// <summary>
