@@ -1952,11 +1952,13 @@ namespace ZoomMeetingBotSDK
                 }
                 else if ((arg == "hand") || (arg == "hands"))
                 {
-                    response = EnableTracking(from.UserId, "hands");
+                    _ = Controller.SendChatMessage(replyTo, EnableTracking(from.UserId, "hands"));
+                    response = $"Raised Hands: {(raisedHandParticipants.Count == 0 ? "None" : raisedHandParticipants.ToDelimString())}";
                 }
                 else if ((arg == "talking") || (arg == "talkers") || (arg == "talk") || (arg == "activeaudio") || (arg == "audio"))
                 {
-                    response = EnableTracking(from.UserId, "talkers");
+                    _ = Controller.SendChatMessage(replyTo, EnableTracking(from.UserId, "talkers"));
+                    response = $"Talkers: {(activeAudioParticipants.Count == 0 ? "None" : activeAudioParticipants.ToDelimString())}";
                 }
                 else if ((arg == "chat") || (arg == "chats"))
                 {
