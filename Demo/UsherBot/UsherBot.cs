@@ -111,6 +111,7 @@ namespace ZoomMeetingBotSDK
                 WaitingRoomAnnouncementMessage = null;
                 WaitingRoomAnnouncementDelaySecs = 60;
                 IncludeUserIdsInLists = false;
+                OneTimeMsg = "I'm just a Bot. If you need something, please speak to one of the Co-Hosts.";
             }
 
             /// <summary>
@@ -185,6 +186,11 @@ namespace ZoomMeetingBotSDK
             /// Controls including user ids in lists or not.  If on, users are listed like "\"User Name\"#123456"; If off just "User Name".
             /// </summary>
             public bool IncludeUserIdsInLists { get; set; }
+
+            /// <summary>
+            /// One-time message send after one-time hi (and optionally topic).
+            /// </summary>
+            public string OneTimeMsg { get; set; }
         }
 
         public static BotConfigurationSettings cfg = new BotConfigurationSettings();
@@ -329,6 +335,8 @@ namespace ZoomMeetingBotSDK
             {
                 response = topic;
             }
+
+            DicTopicSends.Add(recipient.UserId, recipient.Name);
 
             return Controller.SendChatMessage(recipient, response);
         }
@@ -790,6 +798,7 @@ namespace ZoomMeetingBotSDK
 
         private static readonly Dictionary<uint, string> DicOneTimeHis = new Dictionary<uint, string>();
         private static readonly Dictionary<uint, string> DicTopicSends = new Dictionary<uint, string>();
+        private static readonly Dictionary<uint, string> DicOneTimeMsg = new Dictionary<uint, string>();
 
         private static string OneTimeHi(string text, Controller.Participant p)
         {
@@ -821,6 +830,26 @@ namespace ZoomMeetingBotSDK
             }
 
             return response;
+        }
+
+        private static string OneTimeMsg(string text, Controller.Participant p)
+        {
+            string response = null;
+
+            if (cfg.OneTimeMsg == null)
+            {
+                return response;
+            }
+
+            // Do one-time msg only once per unique userId/name
+            if (DicOneTimeMsg.ContainsKey(p.UserId) || DicOneTimeMsg.Values.Contains(p.Name))
+            {
+                return null;
+            }
+
+            DicOneTimeMsg.Add(p.UserId, p.Name);
+
+            return cfg.OneTimeMsg;
         }
 
         private static void SetSpeaker(Controller.Participant newSpeaker, Controller.Participant from)
@@ -1493,9 +1522,7 @@ namespace ZoomMeetingBotSDK
             {
                 // If the bot is addressed publically or if there are only two people in the meeting, then reply with TTS
                 var speak = isToEveryone || onlyTwoAttendees;
-
-                // We start with a one-time hi.  Various bots may be in different time zones and the good morning/afternoon/evening throws things off
-                var response = OneTimeHi(text, from);
+                string response = null;
 
                 // Handle canned responses based on broadcast keywords.  TBD: Move this into a bot
                 if (cfg.BroadcastCommands != null)
@@ -1510,6 +1537,18 @@ namespace ZoomMeetingBotSDK
                             speak = false;
                         }
                     }
+                }
+
+                // We start with a one-time hi, if configured.  Various bots may be in different time zones and the good morning/afternoon/evening throws things off
+                if (response == null)
+                {
+                    response = OneTimeHi(text, from);
+                }
+
+                // Next is a one-time message, if configured
+                if (response == null)
+                {
+                    response = OneTimeMsg(text, from);
                 }
 
                 // Handle topic request
