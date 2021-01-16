@@ -1296,6 +1296,13 @@ namespace ZoomMeetingBotSDK
         [MethodImplAttribute(MethodImplOptions.NoInlining)]
         public static bool SendChatMessage(Participant to, string text)
         {
+            // NOTE: Even though sending to everyone in the waiting room is available in the GUI, it is not yet available via the SDK.
+            // In the future, it will likely be implemented with a special userId value == SpecialParticipant.everyoneInWaitingRoom.UserId.
+            // For more details, see:
+            //   https://devforum.zoom.us/t/how-to-send-chat-messages-to-everyone-in-waiting-room/39538
+            // One alternative might have been to simulate mouse clicks and keystrokes to the chat interface.  Unfortunately, I tried this
+            //   and, while in SDK mode text can be pasted into the text box, however the Enter key is ignored, so there is no way to send
+            //   the message.
             try
             {
                 var sdkErr = chatController.SendChatTo(to.UserId, text);
@@ -1303,12 +1310,14 @@ namespace ZoomMeetingBotSDK
                 {
                     throw new Exception(sdkErr.ToString());
                 }
+
                 return true;
             }
             catch (Exception ex)
             {
                 hostApp.Log(LogType.ERR, $"{new StackFrame(1).GetMethod().Name} Failed to send chat message {repr(text)} to {to}: {ex}");
             }
+
             return false;
         }
 
@@ -1593,16 +1602,6 @@ namespace ZoomMeetingBotSDK
             }
 
             return false;
-        }
-
-        private static bool loggedLayoutWindowsWarning = false;
-        public static void LayoutWindows()
-        {
-            if (!loggedLayoutWindowsWarning)
-            {
-                hostApp.Log(LogType.WRN, $"{MethodBase.GetCurrentMethod().Name} Not Yet Implemented");
-                loggedLayoutWindowsWarning = true;
-            }
         }
     }
 }

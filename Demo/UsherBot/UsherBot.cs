@@ -475,12 +475,10 @@ namespace ZoomMeetingBotSDK
                 dtNow = DateTime.UtcNow;
                 if (dtNow >= dtLastWaitingRoomAnnouncement.AddSeconds(cfg.WaitingRoomAnnouncementDelaySecs))
                 {
-                    // TBD: Sending to everyone in the waiting room is not yet available via the SDK -- Try sending to everyone since there's nobody in the meeting
-                    // Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInWaitingRoom, waitMsg);
-                    if (Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, waitMsg))
-                    {
-                        dtLastWaitingRoomAnnouncement = dtNow;
-                    }
+                    // TBD: Sending to everyone in the waiting room is not yet available via the SDK.  For more details, see:
+                    //   https://devforum.zoom.us/t/how-to-send-chat-messages-to-everyone-in-waiting-room/39538
+                    _ = Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInWaitingRoom, waitMsg);
+                    dtLastWaitingRoomAnnouncement = dtNow;
                 }
             }
 

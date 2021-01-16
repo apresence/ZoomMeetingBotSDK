@@ -229,9 +229,6 @@
             try
             {
                 LoadSettings();
-
-                // Zoom is really bad about moving/resizing it's windows, so keep it in check
-                Controller.LayoutWindows();
             }
             catch (Exception ex)
             {
