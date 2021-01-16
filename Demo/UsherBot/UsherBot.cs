@@ -568,7 +568,6 @@ namespace ZoomMeetingBotSDK
                     {
                         hostApp.Log(LogType.INF, "Received {0} command", line);
                         UsherBot.LeaveMeeting(false);
-                        shouldExit = true;
                     }
                     else if ((line == "kill") || (line == "end"))
                     {
