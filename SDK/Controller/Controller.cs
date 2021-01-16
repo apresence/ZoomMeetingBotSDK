@@ -644,7 +644,8 @@ namespace ZoomMeetingBotSDK
                 }
             }
 
-            UpdateParticipantActiveAudio();
+            // This fires way too frequently...
+            //UpdateParticipantActiveAudio();
         }
 
         public static void Zoom_OnSpotlightVideoChangeNotification(bool bSpotlight, uint userid)
