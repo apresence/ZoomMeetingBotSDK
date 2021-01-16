@@ -3,7 +3,6 @@
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using System.Reflection;
     using System.Security.Cryptography;
     using System.Text;
     using System.Text.RegularExpressions;
@@ -45,7 +44,9 @@
             {
                 try
                 {
-                    return (new JavaScriptSerializer()).Serialize(obj);
+                    // Switched to NewtonSoft.JSON.  Much more user-friendly.  For example, NS does not encode simple chars like "&" to "\u0026".
+                    //return (new JavaScriptSerializer()).Serialize(obj);
+                    return JsonConvert.SerializeObject(obj);
                 }
                 catch
                 {
