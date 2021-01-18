@@ -107,11 +107,9 @@ namespace ZoomMeetingBotSDK
                 BroadcastCommands = new Dictionary<string, string>();
                 BroadcastCommandGuardTimeSecs = 300;
                 EmailCommands = new Dictionary<string, EmailCommandArgs>();
-                OneTimeHiSequences = new Dictionary<string, string>();
                 WaitingRoomAnnouncementMessage = null;
                 WaitingRoomAnnouncementDelaySecs = 60;
                 IncludeUserIdsInLists = false;
-                OneTimeMsg = "I'm just a Bot. If you need something, please chat with one of the Co-Hosts.";
             }
 
             /// <summary>
@@ -168,11 +166,6 @@ namespace ZoomMeetingBotSDK
             public Dictionary<string, EmailCommandArgs> EmailCommands { get; set; }
 
             /// <summary>
-            /// A list of pre-defined one-time greetings based on received private chat messages.  Use pipes to allow more than one query to produce the same response.  TBD: Move into RemedialBot
-            /// </summary>
-            public Dictionary<string, string> OneTimeHiSequences { get; set; }
-
-            /// <summary>
             /// If set, this message is sent to participants in the waiting room every WaitingRoomAnnouncementDelaySecs seconds.
             /// </summary>
             public string WaitingRoomAnnouncementMessage { get; set; }
@@ -186,11 +179,6 @@ namespace ZoomMeetingBotSDK
             /// Controls including user ids in lists or not.  If on, users are listed like "\"User Name\"#123456"; If off just "User Name".
             /// </summary>
             public bool IncludeUserIdsInLists { get; set; }
-
-            /// <summary>
-            /// One-time message send after one-time hi (and optionally topic).
-            /// </summary>
-            public string OneTimeMsg { get; set; }
         }
 
         public static BotConfigurationSettings cfg = new BotConfigurationSettings();
@@ -299,7 +287,7 @@ namespace ZoomMeetingBotSDK
         public static string GetTopic(bool useDefault = true)
         {
             if (string.IsNullOrEmpty(Topic)) {
-                return useDefault ? "The topic has not been set" : null;
+                return useDefault ? "The topic has not been set." : null;
             }
 
             return GetTodayTonight().UppercaseFirst() + "'s topic: " + Topic;
@@ -326,17 +314,10 @@ namespace ZoomMeetingBotSDK
                 return false;
             }
 
-            var response = OneTimeHi("morning", recipient);
-            if (response != null)
-            {
-                response = FormatChatResponse(response, recipient.Name) + " " + topic;
-            }
-            else
-            {
-                response = topic;
-            }
+            var response = ChatBotConverse("_onetimehi_", recipient, "SimpleBot"); // Say "hi"
+            response = response == null ? topic : response + " " + topic;
 
-            DicTopicSends.Add(recipient.UserId, recipient.Name);
+            DicTopicSends[recipient.UserId] = recipient.Name;
 
             return Controller.SendChatMessage(recipient, response);
         }
@@ -503,7 +484,7 @@ namespace ZoomMeetingBotSDK
                 if (idx != -1)
                 {
                     FirstParticipantGreeted = plist[idx].Name;
-                    var msg = FormatChatResponse(OneTimeHi("morning", plist[idx]), FirstParticipantGreeted);
+                    var msg = ChatBotConverse("_onetimehi_", plist[idx], "SimpleBot"); // Say "hi"
 
                     Sound.Play("bootup");
                     Thread.Sleep(3000);
@@ -753,13 +734,17 @@ namespace ZoomMeetingBotSDK
                         // TBD: Could load all of this into a Dictionary<string, string> ...
                         string key = accum.ToString();
                         string val = null;
-                        if (key == "0")
+                        if ((key == "0") || (key == "firstname"))
                         {
                             val = GetFirstName(to);
                         }
-                        else if (key == "1")
+                        else if ((key == "1") || (key == "timeofday"))
                         {
                             val = GetDayTime();
+                        }
+                        else if (key == "topic")
+                        {
+                            val = GetTopic(true);
                         }
                         else
                         {
@@ -795,61 +780,7 @@ namespace ZoomMeetingBotSDK
             return ret.ToString();
         }
 
-        private static readonly Dictionary<uint, string> DicOneTimeHis = new Dictionary<uint, string>();
         private static readonly Dictionary<uint, string> DicTopicSends = new Dictionary<uint, string>();
-        private static readonly Dictionary<uint, string> DicOneTimeMsg = new Dictionary<uint, string>();
-
-        private static string OneTimeHi(string text, Controller.Participant p)
-        {
-            string response = null;
-
-            if (cfg.OneTimeHiSequences == null)
-            {
-                return response;
-            }
-
-            // Do one-time "hi" only once per unique userId/name
-            if (DicOneTimeHis.ContainsKey(p.UserId) || DicOneTimeHis.Values.Contains(p.Name))
-            {
-                return null;
-            }
-
-            // Try to give a specific response
-            foreach (var word in text.GetWordsInSentence())
-            {
-                if (cfg.OneTimeHiSequences.TryGetValue(word.ToLower(), out response))
-                {
-                    break;
-                }
-            }
-
-            if (response != null)
-            {
-                DicOneTimeHis.Add(p.UserId, p.Name);
-            }
-
-            return response;
-        }
-
-        private static string OneTimeMsg(string text, Controller.Participant p)
-        {
-            string response = null;
-
-            if (cfg.OneTimeMsg == null)
-            {
-                return response;
-            }
-
-            // Do one-time msg only once per unique userId/name
-            if (DicOneTimeMsg.ContainsKey(p.UserId) || DicOneTimeMsg.Values.Contains(p.Name))
-            {
-                return null;
-            }
-
-            DicOneTimeMsg.Add(p.UserId, p.Name);
-
-            return cfg.OneTimeMsg;
-        }
 
         private static void SetSpeaker(Controller.Participant newSpeaker, Controller.Participant from)
         {
@@ -961,9 +892,9 @@ namespace ZoomMeetingBotSDK
                                 {
                                     hostApp = hostApp,
                                 });
-                                hostApp.Log(LogType.DBG, $"Loaded {repr(chatBotInfo.Name)} chatbot with intelligence level {chatBotInfo.IntelligenceLevel}");
+                                hostApp.Log(LogType.DBG, $"Loaded {repr(chatBotInfo.Name)} chatbot with intelligence level {chatBotInfo.DefaultOrder}");
                                 chatBot.Start();
-                                bots.Add(new Tuple<int, IChatBot>(chatBotInfo.IntelligenceLevel, chatBot));
+                                bots.Add(new Tuple<int, IChatBot>(chatBotInfo.DefaultOrder, chatBot));
                             }
                         }
                     }
@@ -979,7 +910,7 @@ namespace ZoomMeetingBotSDK
                 return null;
             }
 
-            return bots.OrderByDescending(o => o.Item1).Select(x => x.Item2).ToList();
+            return bots.OrderBy(o => o.Item1).Select(x => x.Item2).ToList();
         }
 
         public static void LeaveMeeting(bool endMeetingForAll = true)
@@ -1432,19 +1363,30 @@ namespace ZoomMeetingBotSDK
 
         }
 
+        private static readonly string[] scrubTTSBadTexts = new string[] { "@", "http", "Forecast" };
+        private static readonly Regex scrubTTSRegex = new Regex(@"^(.*?)<tts>(.*?)</tts>(.*?)$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         /// <summary>
         /// Pre-processes TTS text, removing excessive or illegible things such as email addresses, web pages, etc.
         /// </summary>
-        private static string ScrubTTS(string text)
+        private static void ScrubTTS(string input, out string text, out string tts)
         {
-            var lines = text.GetLines();
-            var ret = new List<string>();
-            var badTexts = new string[] { "@", "http", "Forecast" };
 
+            // If text contains <tts>...</tts>, then use what's inside of the tags
+            var match = scrubTTSRegex.Match(input);
+            if ((match != null) && (match.Groups.Count == 4))
+            {
+                text = (match.Groups[1].Value + " " + match.Groups[3].Value).Trim();
+                tts = match.Groups[2].Value.Trim();
+                return;
+            }
+
+            text = input;
+            var lines = input.GetLines();
+            var ret = new List<string>();
             foreach (var line in lines)
             {
                 var done = false;
-                foreach (var badText in badTexts)
+                foreach (var badText in scrubTTSBadTexts)
                 {
                     if (line.Contains(badText))
                     {
@@ -1461,7 +1403,100 @@ namespace ZoomMeetingBotSDK
                 ret.Add(line.Trim());
             }
 
-            return string.Join("\n", ret);
+            tts = string.Join("\n", ret);
+        }
+
+        private static bool SendChatAndSpeak(Controller.Participant to, string input, bool speak = true)
+        {
+            ScrubTTS(input, out string text, out string tts);
+
+            var ret = ((text != null) && (text.Length > 0)) ? Controller.SendChatMessage(to, text) : true;
+
+            if (ret && speak && (tts != null) && (tts.Length > 0))
+            {
+                Sound.Speak(tts);
+            }
+
+            return ret;
+        }
+
+        private class ChatBotSender : IChatBotUser
+        {
+            public ChatBotSender(Controller.Participant p)
+            {
+                Name = p.Name;
+                UserId = p.UserId;
+            }
+
+            public string Name { get; set; }
+            public uint UserId { get; set; }
+        }
+
+        private static string ChatBotConverse(string text, Controller.Participant from, string specificBot = null)
+        {
+            string response = null;
+            string botName = null;
+
+            // No sense in trying to do anything if we don't have any ChatBots available
+            if ((chatBots == null) || (chatBots.Count == 0))
+            {
+                return response;
+            }
+
+            // We'll try each bot in order until one of them provides a response
+            foreach (var chatBot in chatBots)
+            {
+                botName = chatBot.GetChatBotInfo().Name;
+                if ((specificBot != null) && (botName != specificBot))
+                {
+                    // Looking for a specific bot, and this one ain't it!
+                    continue;
+                }
+
+                string failureMsg = null;
+                try
+                {
+                    response = chatBot.Converse(text, new ChatBotSender(from));
+                    if (response == null)
+                    {
+                        failureMsg = "Response is null";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failureMsg = "Exception occurred: " + ex.ToString();
+                    response = null;
+                }
+
+                if (response != null)
+                {
+                    break;
+                }
+
+                //hostApp.Log(LogType.WRN, $"ChatBot converse with {repr(chatBot.GetChatBotInfo().Name)} failed: {repr(failureMsg)}");
+            }
+
+            if (response == null)
+            {
+                hostApp.Log(LogType.ERR, "No ChatBot was able to produce a response");
+                return response;
+            }
+
+            hostApp.Log(LogType.INF, $"chatBot {botName} > {from}: {repr(response)}");
+
+            response = FormatChatResponse(response, from.Name);
+
+            /*
+            var idx = response.IndexOf(" /");
+            if (idx > 1)
+            {
+                // Allow for the case where we have a message with a command.  For example: "Hi there! /donate".
+                _ = SendChatAndSpeak(from, response.Substring(0, idx), false);
+                response = response.Substring(idx+1);
+            }
+            */
+
+            return response;
         }
 
         private void Controller_OnChatMessageReceive(object sender, Controller.OnChatMessageReceiveArgs e)
@@ -1513,99 +1548,33 @@ namespace ZoomMeetingBotSDK
             }
 
             // ====
-            // Handle small talk
+            // Handle chit-chat
             // ====
 
             // All commands start with "/"; Treat everything else as small talk
             if (!text.StartsWith("/"))
             {
-                // If the bot is addressed publically or if there are only two people in the meeting, then reply with TTS
-                var speak = isToEveryone || onlyTwoAttendees;
-                string response = null;
-
-                // Handle canned responses based on broadcast keywords.  TBD: Move this into a bot
-                if (cfg.BroadcastCommands != null)
-                {
-                    foreach (var broadcastCommand in cfg.BroadcastCommands)
-                    {
-                        if (FastRegex.IsMatch(text, $"\\b${broadcastCommand.Key}\\b", RegexOptions.IgnoreCase))
-                        {
-                            response = broadcastCommand.Value;
-
-                            // Don't want to speak broadcast messages
-                            speak = false;
-                        }
-                    }
-                }
-
-                // We start with a one-time hi, if configured.  Various bots may be in different time zones and the good morning/afternoon/evening throws things off
-                if (response == null)
-                {
-                    response = OneTimeHi(text, from);
-                }
-
-                // Next is a one-time message, if configured
-                if (response == null)
-                {
-                    response = OneTimeMsg(text, from);
-                }
-
-                // Handle topic request
-                if (response == null)
-                {
-                    if (FastRegex.IsMatch(text, $"\\b(topic|reading)\\b", RegexOptions.IgnoreCase))
-                    {
-                        _ = SendTopic(replyTo, true);
-                        return;
-                    }
-                }
-
-                // We did the one time hi, now feed the text to the chat bots!
-                if ((response == null) && (chatBots != null))
-                {
-                    // We'll try each bot in order by intelligence level until one of them works
-                    foreach (var chatBot in chatBots)
-                    {
-                        string failureMsg = null;
-                        try
-                        {
-                            response = chatBot.Converse(text, from.Name); // TBD: from.userId?
-                            if (response == null)
-                            {
-                                failureMsg = "Response is null";
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            failureMsg = "Exception occured: " + ex.ToString();
-                            response = null;
-                        }
-
-                        if (response != null)
-                        {
-                            break;
-                        }
-
-                        hostApp.Log(LogType.WRN, $"ChatBot converse with {repr(chatBot.GetChatBotInfo().Name)} failed: {repr(failureMsg)}");
-                    }
-                }
+                var response = ChatBotConverse(text, from);
 
                 if (response == null)
                 {
-                    hostApp.Log(LogType.ERR, "No ChatBot was able to produce a response");
+                    // No ChatBot response, so just ignore the incoming message
+                    return;
                 }
 
-                response = FormatChatResponse(response, from.Name);
-                if (Controller.SendChatMessage(replyTo, response) && speak)
+                if (!response.StartsWith("/"))
                 {
-                    var ttsText = ScrubTTS(response);
-                    if (ttsText.Length != 0)
-                    {
-                        Sound.Speak(ttsText);
-                    }
+                    // If the bot is addressed publically or if there are only two people in the meeting, then reply with TTS
+                    var speak = isToEveryone || onlyTwoAttendees;
+
+                    _ = SendChatAndSpeak(replyTo, response, speak);
+
+                    return;
                 }
 
-                return;
+                // The ChatBot wants the control bot to run a command; Pass it along
+                text = response;
+                isPrivate = true;
             }
 
             // ====
@@ -1618,34 +1587,43 @@ namespace ZoomMeetingBotSDK
                 return;
             }
 
+            string[] a = text.Split(SpaceDelim, 2);
+
+            string sCommand = a[0].ToLower().Substring(1);
+
+            // Parse out command argument if given
+            string sTarget = (a.Length == 1) ? null : (a[1].Length == 0 ? null : a[1]);
+
             // Determine if sender is admin or not
             GoodUsers.TryGetValue(CleanUserName(e.from.Name), out bool bAdmin);
 
-            // Non-priviledged retrival of topic
-            if ((!bAdmin) && (text == "/topic"))
+            // Non-priviledged commands
+            if (!bAdmin)
             {
-                SendTopic(replyTo, true);
+                // Always reply directly to sender here
+                replyTo = from;
+
+                if (sCommand == "topic")
+                {
+                    SendTopic(replyTo, true);
+                    return;
+                }
+
+                if (cfg.BroadcastCommands.TryGetValue(sCommand, out string response))
+                {
+                    //_ = Controller.SendChatMessage(replyTo, response);
+                    _ = SendChatAndSpeak(replyTo, response, false);
+                    return;
+                }
+
+                _ = Controller.SendChatMessage(from, $"I'm sorry, you are not authorized to run that command.");
+
                 return;
             }
 
             // ====
             // Handle priviledged commands
             // ====
-
-            // Only allow admin users to run priviledged commands
-            if (!bAdmin)
-            {
-                _ = Controller.SendChatMessage(replyTo, $"Sorry, you are not authorized to run that command.");
-                hostApp.Log(LogType.WRN, $"Ignoring command {repr(text)} from non-admin {from}");
-                return;
-            }
-
-            string[] a = text.Split(SpaceDelim, 2);
-
-            string sCommand = a[0].ToLower().Substring(1);
-
-            // All of the following commands require an argument
-            string sTarget = (a.Length == 1) ? null : (a[1].Length == 0 ? null : a[1]);
 
             if (cfg.BroadcastCommands.TryGetValue(sCommand, out string broadcastMsg))
             {
@@ -1668,7 +1646,8 @@ namespace ZoomMeetingBotSDK
                     }
                 }
 
-                if (Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, broadcastMsg))
+                //if (Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, broadcastMsg))
+                if (SendChatAndSpeak(Controller.SpecialParticipant.everyoneInMeeting, broadcastMsg, false))
                 {
                     BroadcastSentTime[sCommand] = dtNow;
                 }
@@ -1694,7 +1673,13 @@ namespace ZoomMeetingBotSDK
 
                 if (cmd == "force")
                 {
+                    if ((b[1] != null) && (!b[1].EndsWith(".")))
+                    {
+                        b[1] += ".";
+                    }
+
                     Topic = b[1];
+
                     reply = "Topic forced to: " + Topic;
                     broadcast = true;
                 }
@@ -1716,6 +1701,11 @@ namespace ZoomMeetingBotSDK
                 }
                 else if (Topic == null)
                 {
+                    if ((sTarget != null) && (!sTarget.EndsWith(".")))
+                    {
+                        sTarget += ".";
+                    }
+
                     reply = "Topic set to: " + sTarget;
                     Topic = sTarget;
                     broadcast = true;
@@ -1729,7 +1719,7 @@ namespace ZoomMeetingBotSDK
 
                 if (broadcast)
                 {
-                    _ = Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, GetTopic());
+                    _ = SendChatAndSpeak(Controller.SpecialParticipant.everyoneInMeeting, GetTopic(), false);
                 }
 
                 return;
@@ -2178,7 +2168,6 @@ namespace ZoomMeetingBotSDK
         {
             cfg = DeserializeJson<BotConfigurationSettings>(hostApp.GetSettingsAsJSON());
             ExpandDictionaryPipes(cfg.BroadcastCommands);
-            ExpandDictionaryPipes(cfg.OneTimeHiSequences);
         }
     }
 }

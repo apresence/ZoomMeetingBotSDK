@@ -135,15 +135,12 @@
             }
         }
 
-        public static void ExpandDictionaryPipes(Dictionary<string, string> dic)
+        public static void ExpandDictionaryPipes<T>(Dictionary<string, T> dic)
         {
             if (dic is null)
             {
                 return;
             }
-            
-            //string[] keys = new string[dic.Count];
-            //dic.Keys.CopyTo(keys, 0);
 
             foreach (string key in dic.Keys.ToList())
             {

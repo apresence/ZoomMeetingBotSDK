@@ -15,14 +15,27 @@
     public class ChatBotInfo
     {
         /// <summary>
-        /// Retreives the intelligence level of this bot. Higher means the bot converses more like a human, lower means it sounds more like a bot. 
+        /// Retreives the default order of this bot. ChatBots are called in order, lowest to highest, until one of them provides a response.
         /// </summary>
-        public int IntelligenceLevel;
+        public int DefaultOrder;
 
         /// <summary>
         /// Retrieves the name of the type of bot. For example: "ChatterBot".
         /// </summary>
         public string Name;
+    }
+
+    public interface IChatBotUser
+    {
+        /// <summary>
+        /// Gets or sets name of user.
+        /// </summary>
+        string Name { get; set; }
+
+        /// <summary>
+        /// Gets or sets ID of user.  Must be unique.
+        /// </summary>
+        uint UserId { get; set; }
     }
 
     public interface IChatBot
@@ -51,6 +64,6 @@
         /// <summary>
         /// Return a chat response based on input. The "from" input can be a user ID, name, etc. and is used to keep track of separate conversation threads.
         /// </summary>
-        string Converse(string input, string from);
+        string Converse(string input, IChatBotUser from);
     }
 }

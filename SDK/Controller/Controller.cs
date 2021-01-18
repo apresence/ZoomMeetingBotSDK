@@ -1,6 +1,33 @@
 ﻿// TBD:
 // - Figure out how to send messages to people in the waiting room
 
+/*
+
+There's a strange sequence with joining the meeting sometimes.  Figure out how to handle this:
++ 2021-01-18 13:14:39.239 DBG Zoom_OnWatingRoomUserJoin id=16928768 <== Join WR
+  2021-01-18 13:14:39.245 INF Participant "Crispy Chris"#16928768 joined the waiting room
+  2021-01-18 13:14:39.250 INF BOT Admitting {p} : KNOWN
+  2021-01-18 13:14:39.256 INF Participant "Crispy Chris"#16928768 is joining the meeting
+- 2021-01-18 13:14:39.700 DBG Zoom_OnWatingRoomUserLeft id=16928768 <== Leave WR
+  2021-01-18 13:14:39.705 INF Participant "Crispy Chris"#16928768 left the waiting room
++ 2021-01-18 13:14:39.712 DBG Zoom_OnUserJoin ids=[16928768] <== Join Meeting (Why same ID?)
+  2021-01-18 13:14:39.717 INF Participant "Crispy Chris"#16928768 joined the meeting
+  2021-01-18 13:14:39.723 INF chatBot SimpleBot > "Crispy Chris"#16928768: "Good {timeofday}, {firstname}!"
+  2021-01-18 13:14:39.743 INF BOT Promoting "Crispy Chris"#16928768 to Co-host
+  2021-01-18 13:14:39.753 DBG chatMsgNotification from="UsherBot"#16778240 to="Crispy Chris"#16928768 isToEveryone=False text="Good morning, Crispy! Today's topic: Today's Reading:  BB, pg. 301 Physician Heal Thyself."
+  2021-01-18 13:14:39.806 INF Zoom_OnCoHostChangeNotification p="Crispy Chris"#16928768 newRole=USERROLE_COHOST
+- 2021-01-18 13:14:42.198 DBG Zoom_OnUserLeft ids=[16928768] <== Leave Meeting
+  2021-01-18 13:14:42.203 INF Participant "Crispy Chris"#16928768 left the meeting <== 2nd ID
++ 2021-01-18 13:14:42.243 DBG Zoom_OnUserJoin ids=[16929792] <== Join Meeting (New ID!)
+  2021-01-18 13:14:42.247 INF Participant "Crispy Chris"#16929792 joined the meeting
+  2021-01-18 13:14:43.746 DBG Zoom_OnUserAudioStatusChange p="Crispy Chris"#16929792 audioDevice=AUDIOTYPE_VOIP
+
+In this case, the chat messages were lost, but somehow Co-Host was preserved.
+
+Maybe implement a guard time for chat messages/activites?
+
+*/
+
 using System;
 using System.Collections.Generic;
 using System.Linq;

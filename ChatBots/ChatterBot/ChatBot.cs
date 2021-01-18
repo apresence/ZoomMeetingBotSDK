@@ -16,7 +16,7 @@
         private static readonly ChatBotInfo chatBotInfo = new ChatBotInfo()
         {
             Name = "ChatterBot",
-            IntelligenceLevel = 100,
+            DefaultOrder = 800,
         };
 
         private IHostApp hostApp;
@@ -134,7 +134,7 @@
         /// Takes input and returns conversational output from the chatbot.
         /// It is assumed that the chatbot will prompt for input with "] ".
         /// </summary>
-        public string Converse(string input, string from)
+        public string Converse(string input, IChatBotUser from)
         {
             if (!bStarted)
             {
