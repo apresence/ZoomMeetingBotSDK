@@ -1333,7 +1333,26 @@ namespace ZoomMeetingBotSDK
             //   the message.
             try
             {
-                var sdkErr = chatController.SendChatTo(to.UserId, text);
+                var sdkErr = SDKError.SDKERR_UNKNOWN;
+
+                // Try up to 3x to send message if SDKERR_TOO_FREQUENT_CALL returned
+                // TBD: May need to do a send queue with exponential back-off
+                for (var i = 0; i <= 2; i++)
+                {
+                    if (i > 0)
+                    {
+                        Thread.Sleep(i * 1000);
+                    }
+
+                    sdkErr = chatController.SendChatTo(to.UserId, text);
+                    if (sdkErr != SDKError.SDKERR_TOO_FREQUENT_CALL)
+                    {
+                        break;
+                    }
+
+                    hostApp.Log(LogType.WRN, $"{new StackFrame(1).GetMethod().Name} Failed to send chat message {repr(text)} to {to}: {sdkErr} -- WILL RETRY IN {i + 1}s");
+                }
+
                 if (sdkErr != SDKError.SDKERR_SUCCESS)
                 {
                     throw new Exception(sdkErr.ToString());
