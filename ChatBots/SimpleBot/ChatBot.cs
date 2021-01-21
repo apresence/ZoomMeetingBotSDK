@@ -201,6 +201,7 @@ namespace ZoomMeetingBotSDK.ChatBot.SimpleBot
         private static string SmallTalk(string text, IChatBotUser to)
         {
             string[] responses = null;
+            bool isToEveryone = to.Name.ToLower().StartsWith("everyone") || to.UserId == 0;
 
             var smallTalk = cfg.SmallTalkSequences;
             if (smallTalk != null)
@@ -218,7 +219,7 @@ namespace ZoomMeetingBotSDK.ChatBot.SimpleBot
             RememberThatISaid(response, to);
 
             // Add one-time message if needed
-            if ((response == null) || ((response != null) && (!response.StartsWith("{"))))
+            if ((!isToEveryone) && ((response == null) || ((response != null) && (!response.StartsWith("{")))))
             {
                 response = ExpandOneTimeMsg(response, to);
             }

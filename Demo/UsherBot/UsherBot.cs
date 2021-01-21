@@ -486,8 +486,12 @@ namespace ZoomMeetingBotSDK
                     FirstParticipantGreeted = plist[idx].Name;
                     var msg = ChatBotConverse("_onetimehi_", plist[idx], "SimpleBot"); // Say "hi"
 
-                    Sound.Play("bootup");
                     Thread.Sleep(3000);
+
+                    Sound.Play("bootup");
+
+                    Thread.Sleep(3000);
+
                     Sound.Speak(cfg.MyParticipantName + " online.");
 
                     if (Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, msg))
@@ -847,8 +851,7 @@ namespace ZoomMeetingBotSDK
 
         /// <summary>
         /// Searches for ChatBot plugins under plugins\ChatBots\{BotName}\ZoomMeetingBotSDK.ChatBot.{BotName}.dll and tries to instantiate them,
-        /// returning a list of ones that succeeded.  The list is ordered by intelligence level, with the most intelligent bot listed
-        /// first.
+        /// returning a list of ones that succeeded.  The list is ordered ascending by "order".
         ///
         /// NOTE: We put the plugins in their own directories to allow them to use whatever .Net verison and dependency libraries they'd
         /// like without confliciting with those used by the main process.
@@ -892,7 +895,7 @@ namespace ZoomMeetingBotSDK
                                 {
                                     hostApp = hostApp,
                                 });
-                                hostApp.Log(LogType.DBG, $"Loaded {repr(chatBotInfo.Name)} chatbot with intelligence level {chatBotInfo.DefaultOrder}");
+                                hostApp.Log(LogType.DBG, $"Loaded {repr(chatBotInfo.Name)} chatbot with order {chatBotInfo.DefaultOrder}");
                                 chatBot.Start();
                                 bots.Add(new Tuple<int, IChatBot>(chatBotInfo.DefaultOrder, chatBot));
                             }
@@ -1432,7 +1435,7 @@ namespace ZoomMeetingBotSDK
             public uint UserId { get; set; }
         }
 
-        private static string ChatBotConverse(string text, Controller.Participant from, string specificBot = null)
+        private static string ChatBotConverse(string text, Controller.Participant from, string specificBot = null, bool isToEveryone = false)
         {
             string response = null;
             string botName = null;
@@ -1456,7 +1459,7 @@ namespace ZoomMeetingBotSDK
                 string failureMsg = null;
                 try
                 {
-                    response = chatBot.Converse(text, new ChatBotSender(from));
+                    response = chatBot.Converse(text, new ChatBotSender(isToEveryone ? Controller.SpecialParticipant.everyoneInMeeting : from));
                     if (response == null)
                     {
                         failureMsg = "Response is null";
@@ -1554,7 +1557,7 @@ namespace ZoomMeetingBotSDK
             // All commands start with "/"; Treat everything else as small talk
             if (!text.StartsWith("/"))
             {
-                var response = ChatBotConverse(text, from);
+                var response = ChatBotConverse(text, from, null, isToEveryone);
 
                 if (response == null)
                 {
