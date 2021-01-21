@@ -290,7 +290,9 @@ namespace ZoomMeetingBotSDK
                 return useDefault ? "The topic has not been set." : null;
             }
 
-            return GetTodayTonight().UppercaseFirst() + "'s topic: " + Topic;
+            // Prepend "Today's topic: " or "Tonight's topic: " only if it is not already present
+            var dayName = GetTodayTonight();
+            return Topic.ToLower().StartsWith(dayName) ? Topic : dayName.UppercaseFirst() + "'s topic: " + Topic;
         }
 
         public static bool SendTopic(Controller.Participant recipient, bool useDefault = true)
