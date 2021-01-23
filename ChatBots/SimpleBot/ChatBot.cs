@@ -89,13 +89,14 @@ namespace ZoomMeetingBotSDK.ChatBot.SimpleBot
 
             HashSet<string> thingsISaid = null;
 
-            if ((to.UserId != 0) && (!ThingsISaidToUserId.TryGetValue(to.UserId, out thingsISaid)))
+            if (!ThingsISaidToUserId.TryGetValue(to.UserId, out thingsISaid))
             {
                 thingsISaid = new HashSet<string>();
                 ThingsISaidToUserId[to.UserId] = thingsISaid;
             }
 
             thingsISaid.Add(text);
+
 
             if (!ThingsISaidToName.TryGetValue(to.Name, out thingsISaid))
             {
