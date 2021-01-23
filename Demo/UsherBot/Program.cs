@@ -141,7 +141,26 @@ namespace ZoomMeetingBotSDK
         [STAThread]
         private static int Main(string[] args)
         {
+            int i;
+
             hostApp = new HostApp();
+
+            // Pre-scan for workdir
+            var newArgs = new List<string>();
+            for (i = 0; i < args.Length; i++)
+            {
+                var arg = args[i];
+                if (string.Equals(arg, "/workdir"))
+                {
+                    hostApp.SetWorkDir(args[++i]);
+                    continue;
+                }
+
+                newArgs.Add(args[i]);
+            }
+
+            // Continue with remaining arguments
+            args = newArgs.ToArray();
             hostApp.Init();
 
             programSettings = DeserializeJson<ProgramSettings>(hostApp.GetSettingsAsJSON());
@@ -160,12 +179,12 @@ namespace ZoomMeetingBotSDK
                 StringBuilder pass = new StringBuilder();
                 while (true)
                 {
-                    ConsoleKeyInfo i = Console.ReadKey(true);
-                    if (i.Key == ConsoleKey.Enter)
+                    ConsoleKeyInfo cki = Console.ReadKey(true);
+                    if (cki.Key == ConsoleKey.Enter)
                     {
                         break;
                     }
-                    else if (i.Key == ConsoleKey.Backspace)
+                    else if (cki.Key == ConsoleKey.Backspace)
                     {
                         if (pass.Length > 0)
                         {
@@ -173,12 +192,13 @@ namespace ZoomMeetingBotSDK
                             Console.Write("\b \b");
                         }
                     }
-                    else if (i.KeyChar != '\u0000') // KeyChar == '\u0000' if the key pressed does not correspond to a printable character, e.g. F1, Pause-Break, etc
+                    else if (cki.KeyChar != '\u0000') // KeyChar == '\u0000' if the key pressed does not correspond to a printable character, e.g. F1, Pause-Break, etc
                     {
-                        pass.Append(i.KeyChar);
+                        pass.Append(cki.KeyChar);
                         Console.Write("*");
                     }
                 }
+
                 Console.WriteLine();
 
                 string passString = pass.ToString();
@@ -237,7 +257,7 @@ namespace ZoomMeetingBotSDK
             }
             UsherBot.ClearRemoteCommands();
 
-            for (int i = 0; i < args.Length; i++)
+            for (i = 0; i < args.Length; i++)
             {
                 var arg = args[i];
                 var arg_l = arg.ToLower();
@@ -272,6 +292,10 @@ namespace ZoomMeetingBotSDK
                 else if (arg_l.Equals("/waitmsg"))
                 {
                     UsherBot.cfg.WaitingRoomAnnouncementMessage = args[++i];
+                }
+                else if (arg_l.Equals("/workdir"))
+                {
+                    hostApp.SetWorkDir(args[++i]);
                 }
                 else
                 {

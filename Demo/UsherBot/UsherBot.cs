@@ -579,7 +579,7 @@ namespace ZoomMeetingBotSDK
 
         private static void LoadGoodUsers()
         {
-            string sPath = @"good_users.txt";
+            string sPath = $"{hostApp.GetWorkDir()}\\good_users.txt";
 
             if (!File.Exists(sPath))
             {

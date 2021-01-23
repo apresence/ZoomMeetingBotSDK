@@ -37,6 +37,12 @@
         /// </summary>
         void Log(LogType nLogType, string sMessage, params object[] values);
 
+
+        /// <summary>
+        /// Retrieve directory where settings files, logs, etc. are located.
+        /// </summary>
+        string GetWorkDir();
+
         /// <summary>
         /// Retrieve JSON string of all settings.
         /// </summary>
@@ -61,11 +67,19 @@
         public virtual event EventHandler SettingsChanged;
 
         /// <summary>
+        /// Retrieve directory where settings files are located.
+        /// </summary>
+        public virtual string GetWorkDir()
+        {
+            return System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+        }
+
+        /// <summary>
         /// Reference implementation for retrieving settings as JSON. Returns an empty string.
         /// </summary>
         public virtual string GetSettingsAsJSON()
         {
-            return "";
+            return null;
         }
 
         /// <summary>

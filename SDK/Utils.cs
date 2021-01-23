@@ -20,14 +20,25 @@
         /// Shared global serializer.  This is a tradeoff between instantiation and lock contention time.
         /// Since I don't plan on using it often, I've chosen the shared/locking method.
         /// </summary>
-        private static JavaScriptSerializer serializer = new JavaScriptSerializer();
+        //private static JavaScriptSerializer serializer = new JavaScriptSerializer();
 
+        /// <summary>
+        /// Deserialize JSON string to typed object.
+        /// </summary>
         public static T DeserializeJson<T>(string json)
         {
             //System.Text.Json version
             //return JsonSerializer.Deserialize<T>(json);
 
             return JsonConvert.DeserializeObject<T>(json);
+        }
+
+        /// <summary>
+        /// Serialize typed object to JSON string.
+        /// </summary>
+        public static string SerializeJson<T>(T obj)
+        {
+            return JsonConvert.SerializeObject(obj, Formatting.Indented);
         }
 
         /// <summary>

@@ -10,15 +10,9 @@
 
     public class HostApp : CHostApp
     {
-        public class HostAppSettings
-        {
-            public HostAppSettings()
-            {
-                DebugLoggingEnabled = false;
-            }
+        public override event EventHandler SettingsChanged;
 
-            public bool DebugLoggingEnabled { get; set; }
-        }
+        private static string workDir = null;
 
         private static readonly object SettingsLock = new object();
         private static readonly object LogLock = new object();
@@ -38,10 +32,28 @@
 
         private static HostAppSettings hostAppSettings = null;
 
-        public override event EventHandler SettingsChanged;
+        public class HostAppSettings
+        {
+            public HostAppSettings()
+            {
+                DebugLoggingEnabled = false;
+            }
+
+            public bool DebugLoggingEnabled { get; set; }
+        }
+
+        public void SetWorkDir(string newDir)
+        {
+            workDir = Path.GetFullPath(newDir);
+        }
 
         public void Init()
         {
+            if (workDir == null)
+            {
+                workDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            }
+
             LoadSettings();
         }
 
@@ -59,11 +71,11 @@
         {
             lock (SettingsLock)
             {
-                string sPath = @"settings.json";
+                string sPath = $"{workDir}\\settings.json";
 
                 if (!File.Exists(sPath))
                 {
-                    SaveSettings();
+                    SaveSettings(sPath);
                     return;
                 }
 
@@ -79,24 +91,25 @@
 
                 Log(LogType.INF, "(Re-)loading settings.json");
 
-                jsonSettings = File.ReadAllText(@"settings.json");
+                jsonSettings = File.ReadAllText(sPath);
                 hostAppSettings = DeserializeJson<HostAppSettings>(jsonSettings);
             }
 
             SettingsChanged?.Invoke(this, null);
         }
 
-        public static void SaveSettings()
+        // Write out default settings file
+        private void SaveSettings(string path)
         {
-            /*
-            hostApp.Log(LogType.INF, "Saving settings.json");
-            var options = new JsonSerializerOptions
-            {
-                WriteIndented = true,
-            };
-            File.WriteAllText(@"settings.json", JsonSerializer.Serialize(cfg, options));
-            */
+            Log(LogType.INF, "Saving settings.json");
+            File.WriteAllText(path, SerializeJson<HostAppSettings>(hostAppSettings));
+
             throw new NotImplementedException();
+        }
+
+        public override string GetWorkDir()
+        {
+            return workDir;
         }
 
         public override string GetSettingsAsJSON()
