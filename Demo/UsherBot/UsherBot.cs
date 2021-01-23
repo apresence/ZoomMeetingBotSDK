@@ -1371,7 +1371,7 @@ namespace ZoomMeetingBotSDK
         private static readonly string[] scrubTTSBadTexts = new string[] { "@", "http", "Forecast" };
         private static readonly Regex scrubTTSRegex = new Regex(@"^(.*?)<tts>(.*?)</tts>(.*?)$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         /// <summary>
-        /// Pre-processes TTS text, removing excessive or illegible things such as email addresses, web pages, etc.
+        /// Pre-processes TTS text, removing excessive or difficult to pronounce things such as email addresses, web pages, etc.
         /// </summary>
         private static void ScrubTTS(string input, out string text, out string tts)
         {
@@ -1504,53 +1504,9 @@ namespace ZoomMeetingBotSDK
             return response;
         }
 
-        private void Controller_OnChatMessageReceive(object sender, Controller.OnChatMessageReceiveArgs e)
+        private void HandleChatMessageToMe(Controller.Participant from, Controller.Participant replyTo, string text, bool isToEveryone, bool onlyTwoAttendees)
         {
-            var to = e.to;
-            var from = e.from;
-            var text = e.text;
-            var isToEveryone = e.isToEveryone;
             var isPrivate = !isToEveryone;
-
-            // TBD: All of this parsing is really messy. It could use a re-write!
-
-            // If the message is from the bot or we're not configured to process chat messages, then bail
-            if (e.from.IsMe || ((cfg.BotAutomationFlags & BotAutomationFlag.ProcessChat) == 0))
-            {
-                return;
-            }
-
-            // Special case when only the bot and one attendee are present
-            // TBD: Folks in the waiting room can throw this out. Really should count # of actual attendees
-            var onlyTwoAttendees = Controller.participants.Count == 2;
-
-            Controller.Participant replyTo = null;
-            if (isToEveryone)
-            {
-                // If there are only two people in the meeting, isPrivate=true and we can assume they are talking to the bot.
-                //   If there is more than one person in the meeting, isPrivate=false and we check for the bot's name so we can be sure they are talking to it.
-                var withoutMyName = Regex.Replace(text, @"\b" + cfg.MyParticipantName + @"\b", string.Empty, RegexOptions.IgnoreCase);
-                if ((withoutMyName == text) && (!onlyTwoAttendees))
-                {
-                    return;
-                }
-
-                // My name is in it!  Treat it like a private message to me (sans my name), but reply to everyone in the meeting
-                text = withoutMyName;
-                replyTo = Controller.SpecialParticipant.everyoneInMeeting;
-            }
-            else
-            {
-                replyTo = from;
-                NotifyTrackers("chat", $"(from {from}) {text}", from.UserId);
-
-                // Currently the SDK only sends events for chats sent to everyone or sent to me, but it's possible that may change in the future.
-                //   We do a sanity check here to make sure we don't respond to messages sent to other participants
-                if (!to.IsMe)
-                {
-                    return;
-                }
-            }
 
             // ====
             // Handle chit-chat
@@ -1600,7 +1556,7 @@ namespace ZoomMeetingBotSDK
             string sTarget = (a.Length == 1) ? null : (a[1].Length == 0 ? null : a[1]);
 
             // Determine if sender is admin or not
-            GoodUsers.TryGetValue(CleanUserName(e.from.Name), out bool bAdmin);
+            GoodUsers.TryGetValue(CleanUserName(from.Name), out bool bAdmin);
 
             // Non-priviledged commands
             if (!bAdmin)
@@ -1812,7 +1768,7 @@ namespace ZoomMeetingBotSDK
             if (sCommand == "ids")
             {
                 string arg = sTarget.ToLower().Trim();
-                bool newModeBool = (arg == "on" || arg == "enabled");
+                bool newModeBool = arg == "on" || arg == "enabled";
                 string newModeStr = newModeBool ? "on" : "off";
 
 
@@ -1877,7 +1833,7 @@ namespace ZoomMeetingBotSDK
             // Handle special "/speaker off" command
             if ((sCommand == "speaker") && (sTarget == "off"))
             {
-                SetSpeaker(null, e.from);
+                SetSpeaker(null, from);
                 return;
             }
 
@@ -2115,11 +2071,67 @@ namespace ZoomMeetingBotSDK
 
             if (sCommand == "speaker")
             {
-                SetSpeaker(target, e.from);
+                SetSpeaker(target, from);
                 return;
             }
 
             _ = Controller.SendChatMessage(replyTo, $"Sorry, I don't know the command {sCommand}");
+        }
+
+        private void Controller_OnChatMessageReceive(object sender, Controller.OnChatMessageReceiveArgs e)
+        {
+            var to = e.to;
+            var from = e.from;
+            var text = e.text;
+            var isToEveryone = e.isToEveryone;
+
+            // TBD: All of this parsing is really messy. It could use a re-write!
+
+            // If the message is from the bot or we're not configured to process chat messages, then bail
+            if (e.from.IsMe || ((cfg.BotAutomationFlags & BotAutomationFlag.ProcessChat) == 0))
+            {
+                return;
+            }
+
+            // Special case when only the bot and one attendee are present
+            // TBD: Folks in the waiting room can throw this off. Really should count # of actual attendees
+            var onlyTwoAttendees = Controller.participants.Count == 2;
+
+            Controller.Participant replyTo = null;
+            if (isToEveryone)
+            {
+                // If there are only two people in the meeting, isPrivate=true and we can assume they are talking to the bot.
+                //   If there is more than one person in the meeting, isPrivate=false and we check for the bot's name so we can be sure they are talking to it.
+                var withoutMyName = Regex.Replace(text, @"\b" + cfg.MyParticipantName + @"\b", string.Empty, RegexOptions.IgnoreCase);
+                if ((withoutMyName == text) && (!onlyTwoAttendees))
+                {
+                    return;
+                }
+
+                // My name is in it!  Treat it like a private message to me (sans my name), but reply to everyone in the meeting
+                text = withoutMyName;
+                replyTo = Controller.SpecialParticipant.everyoneInMeeting;
+            }
+            else
+            {
+                replyTo = from;
+                NotifyTrackers("chat", $"(from {from}) {text}", from.UserId);
+
+                // Currently the SDK only sends events for chats sent to everyone or sent to me, but it's possible that may change in the future.
+                //   We do a sanity check here to make sure we don't respond to messages sent to other participants
+                if (!to.IsMe)
+                {
+                    return;
+                }
+            }
+
+            // Break the text up into multiple lines
+            // TBD: Do some kind of rate throttling in case someone is spamming me?
+            var lines = text.GetLines();
+            foreach (var line in lines)
+            {
+                HandleChatMessageToMe(from, replyTo, line, isToEveryone, onlyTwoAttendees);
+            }
         }
 
         public void Stop()

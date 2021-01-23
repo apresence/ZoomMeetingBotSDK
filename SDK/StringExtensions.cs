@@ -90,7 +90,7 @@
         }
 
         /// <summary>
-        /// Strips leading/trailing from each line and removes blank lines from multi-line strings. Normalizes line delimiter to a carriage return. Returns lines as string array.
+        /// Strips leading/trailing space from each line and removes blank lines from multi-line strings, returns the resulting lines as string array. Lines can be delimited with CR, LF or CR/LF.
         /// </summary>
         public static string[] GetLines(this string s)
         {
