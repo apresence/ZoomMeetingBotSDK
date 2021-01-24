@@ -29,13 +29,20 @@ namespace GmailSenderLib
     {
         private GmailService service;
 
-        public GmailSender(string ApplicationName)
+        public GmailSender(string ApplicationName, string CredentialDir = null)
         {
             UserCredential credential;
 
+            if (CredentialDir == null)
+            {
+                CredentialDir = Directory.GetCurrentDirectory();
+            }
+
+            CredentialDir += "\\Google";
+
             string[] Scopes = { GmailService.Scope.GmailSend };
 
-            using (var stream = new FileStream("credentials.json", FileMode.Open, FileAccess.Read))
+            using (var stream = new FileStream($"{CredentialDir}\\credentials.json", FileMode.Open, FileAccess.Read))
             {
                 // The file token.json stores the user's access and refresh tokens, and is created
                 // automatically when the authorization flow completes for the first time.
@@ -44,7 +51,7 @@ namespace GmailSenderLib
                     Scopes,
                     "user",
                     CancellationToken.None,
-                    new FileDataStore("Google.Apis.Tokens", true)).Result;
+                    new FileDataStore(CredentialDir, true)).Result;
             }
 
             // Create Gmail API service.

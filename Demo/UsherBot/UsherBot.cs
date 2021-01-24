@@ -713,7 +713,7 @@ namespace ZoomMeetingBotSDK
             return (dtNow.Hour < 17) ? "today" : "tonight";
         }
 
-        private static string FormatChatResponse(string text, string to)
+        private static string ResolveVars(string text, string to)
         {
             StringBuilder ret = new StringBuilder();
             StringBuilder accum = null;
@@ -1013,7 +1013,7 @@ namespace ZoomMeetingBotSDK
             {
                 if (gmailSender is null)
                 {
-                    gmailSender = new GmailSenderLib.GmailSender(System.Reflection.Assembly.GetCallingAssembly().GetName().Name);
+                    gmailSender = new GmailSenderLib.GmailSender(System.Reflection.Assembly.GetCallingAssembly().GetName().Name, hostApp.GetWorkDir());
                 }
 
                 hostApp.Log(LogType.ERR, "SendEmail - Sending email to {0} with subject {1}", repr(to), repr(subject));
@@ -1493,7 +1493,7 @@ namespace ZoomMeetingBotSDK
 
             hostApp.Log(LogType.INF, $"chatBot {botName} > {from}: {repr(response)}");
 
-            response = FormatChatResponse(response, from.Name);
+            response = ResolveVars(response, from.Name);
 
             /*
             var idx = response.IndexOf(" /");
@@ -1702,12 +1702,12 @@ namespace ZoomMeetingBotSDK
                 if (cfg.EmailCommands.TryGetValue(sCommand, out EmailCommandArgs emailCommandArgs))
                 {
                     string[] args = sTarget.Trim().Split(SpaceDelim, 2);
-
-                    string toAddress = args[0];
                     string subject = emailCommandArgs.Subject;
                     string body = emailCommandArgs.Body;
+                    string toAddress = args[0];
 
-                    if (subject.Contains("{0}") || body.Contains("{0}"))
+                    // If the command has any variables in it, assume more arguments are needed (ex: recipient name)
+                    if (subject.Contains("{") || body.Contains("{"))
                     {
                         if (args.Length <= 1)
                         {
@@ -1715,9 +1715,9 @@ namespace ZoomMeetingBotSDK
                             return;
                         }
 
-                        string emailArg = args[1].Trim();
-                        subject = subject.Replace("{0}", emailArg);
-                        body = body.Replace("{0}", emailArg);
+                        string toName = args[1].Trim();
+                        subject = ResolveVars(subject, toName);
+                        body = ResolveVars(body, toName);
                     }
 
                     if (SendEmail(subject, body, toAddress))

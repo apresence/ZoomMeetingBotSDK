@@ -14,6 +14,66 @@
 
 === Create & Configure settings.json ===
 
-- Create settings.json
+- Copy "SAMPLE - settings.json" to "settings.json"
+  - Set ZoomUsername
+  - Set ZoomClientSDKKey
 - Run UsherBot.exe /protect
-- 
+  - At the "Unprotected Value" prompt, enter your password
+  - Copy & paste the protected value to the "ZoomPassword" field in settings.json
+- Run UsherBot.exe /protect
+  - At the "Unprotected Value" prompt, enter your Zoom Client SDK Secret
+  - Copy & paste the protected value to the "ZoomClientSDKSecret" field in settings.json
+- Copy "SAMPLE - good_users.txt" to "good_users.txt"
+  - Add your name and the name of any others you wish UsherBot to recognize to the file
+  - To support multiple names/aliases for a person, use pipes.  For example:
+    John Doe|John D|johnnie
+  - To have UsherBot automatically Co-Host someone, put an up-caret at the end of their name, for example:
+    John Doe|John D|johnnie^
+
+=== Gmail Integration ===
+
+This is only required if you would like the bot to be able to send automated emails from a Gmail account on demand.
+
+- Log into your Google account
+- Create a project
+  - Browse to: https://console.developers.google.com/projectcreate
+  - Enter a project name (Ex: UsherBot)
+  - Click Create
+- Enable the Gmail API
+ - Browse to: https://console.developers.google.com/apis/library
+  - Click Gmail API
+  - Click Enable
+- Create OAuth Consent for App
+  * Google tends to change this stuff around, so the instructions may not exactly match
+  - Browse to: https://console.developers.google.com/apis/credentials/consent
+  - Select the project you created (Ex: UsherBot)
+  - Select User Type: External
+  - Click Create
+  - Enter app name (Ex: UsherBot)
+  - Enter support email (your gmail address)
+  - Enter developer contact information (your gmail address)
+  - Click Save and Continue
+  - Scopes: Click Save and Continue
+  - Test users: Click Save and Continue
+  - Summary: Click Back to Dashboard
+- Create OAuth Credentials
+  - Browse to: https://console.developers.google.com/apis/credentials
+  - Click "+ CREATE CREDENTIALS" > OAuth client ID
+  - Application type: Desktop app
+  - Enter app name (Ex: UsherBot)
+  - Click OK
+  - Under "OAuth 2.0 Client IDs", click the download icon to the right, save the json file to your local system
+- Copy the credential file to where the Bot can find it
+  - Create the subdirectory named Google in the UsherBot folder
+  - Move the json file downloaded from the previous step there, and rename it to credentials.json
+- Complete the OAuth process in your browser
+  * This only has to be done the very first time you send an email
+  - Run UsherBot, issue the /email command, Ex: /email your@gmail.com Your Name
+  - A browser will open to sign in "to continue to UsherBot"
+  - Google hasn't verified this app: Continue
+  - Grant UsherBot permission "Send email on your behalf": Allow
+  - Confirm your choices: Allow
+  - "Received verification code. You may now close this window.": Close the window
+  - A file will be saved called "Google.Apis.Auth.OAuth2.Responses.TokenResponse-user" in the Google directory
+- A test email should get sent!
+
