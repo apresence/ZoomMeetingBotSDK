@@ -748,6 +748,10 @@ namespace ZoomMeetingBotSDK
                         {
                             val = GetDayTime();
                         }
+                        else if (key == "fullname")
+                        {
+                            val = to;
+                        }
                         else if (key == "topic")
                         {
                             val = GetTopic(true);

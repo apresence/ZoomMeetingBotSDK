@@ -1,0 +1,19 @@
+=== Obtain Zoom Client SDK Key & Secret ===
+
+- Open browser to https://marketplace.zoom.us/
+- Sign In
+- Agree to Terms of Use
+- Develop > Build App
+- Agree to API License and Terms of Use
+- SDK > Create
+  - Enter App Name (Ex: UsherBot)
+  - Fill in the necessary fields (Company: None, Your Name & Email), Continue > Continue
+  - Copy SDK Key & SDK Secret
+  - Continue
+- Should see "Your app is activated on the account"
+
+=== Create & Configure settings.json ===
+
+- Create settings.json
+- Run UsherBot.exe /protect
+- 
