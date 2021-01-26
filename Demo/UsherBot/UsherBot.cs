@@ -602,71 +602,68 @@ namespace ZoomMeetingBotSDK
 
         private static void LoadUserLevels()
         {
-            string sPath = $"{hostApp.GetWorkDir()}\\users.txt";
-
-            if (!File.Exists(sPath))
+            lock (UserLevels)
             {
-                return;
-            }
 
-            DateTime dtLastMod = File.GetLastWriteTimeUtc(sPath);
+                string sPath = $"{hostApp.GetWorkDir()}\\users.txt";
 
-            // Don't load/reload unless changed
-            if (dtLastMod == dtLastGoodUserMod)
-            {
-                return;
-            }
-
-            dtLastGoodUserMod = dtLastMod;
-
-            hostApp.Log(LogType.INF, "(Re-)loading UserLevels");
-
-            UserLevels.Clear();
-            using (StreamReader sr = File.OpenText(sPath))
-            {
-                string line = null;
-                UserLevel userType = UserLevel.Known;
-                while ((line = sr.ReadLine()) != null)
+                if (!File.Exists(sPath))
                 {
-                    line = line.Trim();
-                    if (line.Length == 0)
-                    {
-                        continue;
-                    }
+                    return;
+                }
 
-                    // CoHost entries end with "^"
-                    if (line.EndsWith("^"))
-                    {
-                        line = line.TrimEnd('^');
-                        userType = UserLevel.CoHost;
-                    }
+                DateTime dtLastMod = File.GetLastWriteTimeUtc(sPath);
 
-                    // Admin entries end with "@"
-                    if (line.EndsWith("@"))
-                    {
-                        line = line.TrimEnd('@');
-                        userType = UserLevel.Admin;
-                    }
+                // Don't load/reload unless changed
+                if (dtLastMod == dtLastGoodUserMod)
+                {
+                    return;
+                }
 
-                    // Allow alises, delimited by "|"
-                    string[] names = line.Split('|');
-                    foreach (string name in names)
+                dtLastGoodUserMod = dtLastMod;
+
+                hostApp.Log(LogType.INF, "(Re-)loading UserLevels");
+
+                UserLevels.Clear();
+                using (StreamReader sr = File.OpenText(sPath))
+                {
+                    string line = null;
+                    while ((line = sr.ReadLine()) != null)
                     {
-                        string cleanName = CleanUserName(name);
-                        if (cleanName.Length == 0)
+                        line = line.Trim();
+                        if (line.Length == 0)
                         {
                             continue;
                         }
 
-                        // TBD: Don't allow generic names -- aka, don't allow names without at least one space in them?
-                        if (UserLevels.ContainsKey(cleanName))
+                        UserLevel userLevel = UserLevel.Known;
+
+                        // CoHost entries end with "^"
+                        if (line.EndsWith("^"))
                         {
-                            // Duplicate entry; Aggregate flags
-                            UserLevels[cleanName] = UserLevels[cleanName] | userType;
+                            line = line.TrimEnd('^');
+                            userLevel = UserLevel.CoHost;
                         }
-                        else
+
+                        // Admin entries end with "@"
+                        if (line.EndsWith("@"))
                         {
-                            UserLevels.Add(cleanName, userType);
+                            line = line.TrimEnd('@');
+                            userLevel = UserLevel.Admin;
+                        }
+
+                        // Allow alises, delimited by "|"
+                        string[] names = line.Split('|');
+                        foreach (string name in names)
+                        {
+                            var cleanName = CleanUserName(name);
+                            _ = UserLevels.TryGetValue(cleanName, out UserLevel oldUserLevel);
+
+                            // If an entry for the user already exists, remove the duplicate and use the higher user level
+                            if (userLevel > oldUserLevel)
+                            {
+                                UserLevels[cleanName] = userLevel;
+                            }
                         }
                     }
                 }
@@ -675,34 +672,37 @@ namespace ZoomMeetingBotSDK
 
         private static void SaveUserLevels()
         {
-            string sPath = $"{hostApp.GetWorkDir()}\\users.txt";
-
-            hostApp.Log(LogType.INF, "Saving UserLevels");
-
-            using (StreamWriter sw = File.CreateText(sPath))
+            lock (UserLevels)
             {
-                var keys = UserLevels.Keys.ToList();
-                keys.Sort();
+                string sPath = $"{hostApp.GetWorkDir()}\\users.txt";
 
-                foreach (var key in keys)
+                hostApp.Log(LogType.INF, "Saving UserLevels");
+
+                using (StreamWriter sw = File.CreateText(sPath))
                 {
-                    var userType = UserLevels[key];
-                    var line = key;
+                    var keys = UserLevels.Keys.ToList();
+                    keys.Sort();
 
-                    if (userType == UserLevel.Admin)
+                    foreach (var key in keys)
                     {
-                        line += '@';
-                    }
-                    else if (userType == UserLevel.CoHost)
-                    {
-                        line += '^';
-                    }
+                        var userLevel = UserLevels[key];
+                        var line = key;
 
-                    sw.WriteLine(line);
+                        if (userLevel == UserLevel.Admin)
+                        {
+                            line += '@';
+                        }
+                        else if (userLevel == UserLevel.CoHost)
+                        {
+                            line += '^';
+                        }
+
+                        sw.WriteLine(line);
+                    }
                 }
-            }
 
-            dtLastGoodUserMod = File.GetLastWriteTimeUtc(sPath);
+                dtLastGoodUserMod = File.GetLastWriteTimeUtc(sPath);
+            }
         }
 
         /// <summary>
@@ -710,8 +710,11 @@ namespace ZoomMeetingBotSDK
         /// </summary>
         private static UserLevel GetUserLevel(string name)
         {
-            UserLevels.TryGetValue(CleanUserName(name), out UserLevel ret);
-            return ret;
+            lock (UserLevels)
+            {
+                UserLevels.TryGetValue(CleanUserName(name), out UserLevel ret);
+                return ret;
+            }
         }
 
         /// <summary>
@@ -719,7 +722,10 @@ namespace ZoomMeetingBotSDK
         /// </summary>
         private static bool CheckUserLevel(string name, UserLevel minLevel)
         {
-            return GetUserLevel(name) >= minLevel;
+            lock (UserLevels)
+            {
+                return GetUserLevel(name) >= minLevel;
+            }
         }
 
         /// <summary>
@@ -727,26 +733,29 @@ namespace ZoomMeetingBotSDK
         /// </summary>
         private static bool SetUserLevel(string name, UserLevel newUserLevel)
         {
-            var cleanName = CleanUserName(name);
-            var exists = UserLevels.TryGetValue(cleanName, out UserLevel oldUserLevel);
-
-            if (oldUserLevel == newUserLevel)
+            lock (UserLevels)
             {
-                return false;
-            }
+                var cleanName = CleanUserName(name);
+                var exists = UserLevels.TryGetValue(cleanName, out UserLevel oldUserLevel);
 
-            if (newUserLevel == UserLevel.Unknown)
-            {
-                UserLevels.Remove(cleanName);
-            }
-            else
-            {
-                UserLevels[cleanName] = newUserLevel;
-            }
+                if (oldUserLevel == newUserLevel)
+                {
+                    return false;
+                }
 
-            SaveUserLevels();
+                if (newUserLevel == UserLevel.Unknown)
+                {
+                    UserLevels.Remove(cleanName);
+                }
+                else
+                {
+                    UserLevels[cleanName] = newUserLevel;
+                }
 
-            return true;
+                SaveUserLevels();
+
+                return true;
+            }
         }
 
         private static readonly char[] SpaceDelim = new char[] { ' ' };
