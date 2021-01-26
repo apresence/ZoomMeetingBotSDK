@@ -31,13 +31,21 @@ namespace ZoomMeetingBotSDK
 
         private static IHostApp hostApp;
 
+        private enum UserLevel
+        {
+            Unknown,
+            Known,
+            CoHost,
+            Admin,
+        }
+
         /// <summary>
         /// This is a list of userIDs and names that we have kicked, banned, etc. for the meeting.  We use this to
         /// prevent re-admitting/co-hosting etc. bad actors.
         /// </summary>
         private static readonly Dictionary<uint, string> BadUsers = new Dictionary<uint, string>();
 
-        private static readonly Dictionary<string, bool> GoodUsers = new Dictionary<string, bool>();
+        private static readonly Dictionary<string, UserLevel> UserLevels = new Dictionary<string, UserLevel>();
         private static readonly object _lock_eh = new object();
 
         private static DateTime dtLastWaitingRoomAnnouncement = DateTime.MinValue;
@@ -495,7 +503,8 @@ namespace ZoomMeetingBotSDK
                     (!x.IsMe) &&
                     (x.Status == Controller.ParticipantStatus.Attending) &&
                     (x.audioDevice == Controller.ControllerAudioType.AUDIOTYPE_VOIP) &&
-                    GoodUsers.ContainsKey(CleanUserName(x.Name))
+                    //UserLevels.ContainsKey(CleanUserName(x.Name))
+                    CheckUserLevel(x.Name, UserLevel.Known)
                 ));
                 if (idx != -1)
                 {
@@ -591,9 +600,9 @@ namespace ZoomMeetingBotSDK
             File.WriteAllText(sPath, string.Join(System.Environment.NewLine, commands));
         }
 
-        private static void LoadGoodUsers()
+        private static void LoadUserLevels()
         {
-            string sPath = $"{hostApp.GetWorkDir()}\\good_users.txt";
+            string sPath = $"{hostApp.GetWorkDir()}\\users.txt";
 
             if (!File.Exists(sPath))
             {
@@ -610,13 +619,13 @@ namespace ZoomMeetingBotSDK
 
             dtLastGoodUserMod = dtLastMod;
 
-            hostApp.Log(LogType.INF, "(Re-)loading GoodUsers");
+            hostApp.Log(LogType.INF, "(Re-)loading UserLevels");
 
-            GoodUsers.Clear();
+            UserLevels.Clear();
             using (StreamReader sr = File.OpenText(sPath))
             {
                 string line = null;
-                bool bAdmin = false;
+                UserLevel userType = UserLevel.Known;
                 while ((line = sr.ReadLine()) != null)
                 {
                     line = line.Trim();
@@ -625,36 +634,119 @@ namespace ZoomMeetingBotSDK
                         continue;
                     }
 
-                    // Admin lines end in "^"
-                    bAdmin = line.EndsWith("^");
-                    if (bAdmin)
+                    // CoHost entries end with "^"
+                    if (line.EndsWith("^"))
                     {
                         line = line.TrimEnd('^');
+                        userType = UserLevel.CoHost;
+                    }
+
+                    // Admin entries end with "@"
+                    if (line.EndsWith("@"))
+                    {
+                        line = line.TrimEnd('@');
+                        userType = UserLevel.Admin;
                     }
 
                     // Allow alises, delimited by "|"
                     string[] names = line.Split('|');
                     foreach (string name in names)
                     {
-                        string sCleanName = CleanUserName(name);
-                        if (sCleanName.Length == 0)
+                        string cleanName = CleanUserName(name);
+                        if (cleanName.Length == 0)
                         {
                             continue;
                         }
 
                         // TBD: Don't allow generic names -- aka, don't allow names without at least one space in them?
-                        if (GoodUsers.ContainsKey(sCleanName))
+                        if (UserLevels.ContainsKey(cleanName))
                         {
-                            // Duplicate entry; Honor admin flag
-                            GoodUsers[sCleanName] = GoodUsers[sCleanName] | bAdmin;
+                            // Duplicate entry; Aggregate flags
+                            UserLevels[cleanName] = UserLevels[cleanName] | userType;
                         }
                         else
                         {
-                            GoodUsers.Add(sCleanName, bAdmin);
+                            UserLevels.Add(cleanName, userType);
                         }
                     }
                 }
             }
+        }
+
+        private static void SaveUserLevels()
+        {
+            string sPath = $"{hostApp.GetWorkDir()}\\users.txt";
+
+            hostApp.Log(LogType.INF, "Saving UserLevels");
+
+            using (StreamWriter sw = File.CreateText(sPath))
+            {
+                var keys = UserLevels.Keys.ToList();
+                keys.Sort();
+
+                foreach (var key in keys)
+                {
+                    var userType = UserLevels[key];
+                    var line = key;
+
+                    if (userType == UserLevel.Admin)
+                    {
+                        line += '@';
+                    }
+                    else if (userType == UserLevel.CoHost)
+                    {
+                        line += '^';
+                    }
+
+                    sw.WriteLine(line);
+                }
+            }
+
+            dtLastGoodUserMod = File.GetLastWriteTimeUtc(sPath);
+        }
+
+        /// <summary>
+        /// Looks up user by 'name' and returns the user flags.  Returns UserFlags.UNKNOWN if the user does not exist.
+        /// </summary>
+        private static UserLevel GetUserLevel(string name)
+        {
+            UserLevels.TryGetValue(CleanUserName(name), out UserLevel ret);
+            return ret;
+        }
+
+        /// <summary>
+        /// Looks up user by 'name' and returns True if the user is the given level or higher.
+        /// </summary>
+        private static bool CheckUserLevel(string name, UserLevel minLevel)
+        {
+            return GetUserLevel(name) >= minLevel;
+        }
+
+        /// <summary>
+        /// Updates the userType for the given user, adding to UserLevels if missing, or removing if newType = UNKNOWN.
+        /// </summary>
+        private static bool SetUserLevel(string name, UserLevel newUserLevel)
+        {
+            var cleanName = CleanUserName(name);
+            var exists = UserLevels.TryGetValue(cleanName, out UserLevel oldUserLevel);
+
+            if (oldUserLevel == newUserLevel)
+            {
+                return false;
+            }
+
+            if (newUserLevel == UserLevel.Unknown)
+            {
+                UserLevels.Remove(cleanName);
+            }
+            else
+            {
+                UserLevels[cleanName] = newUserLevel;
+            }
+
+            SaveUserLevels();
+
+            return true;
         }
 
         private static readonly char[] SpaceDelim = new char[] { ' ' };
@@ -1136,7 +1228,7 @@ namespace ZoomMeetingBotSDK
             {
                 //hostApp.Log(LogType.DBG, "ActionTimer {0:X4} - Enter");
 
-                LoadGoodUsers();
+                LoadUserLevels();
                 ReadRemoteCommands();
 
                 if (cfg.IsPaused)
@@ -1182,7 +1274,7 @@ namespace ZoomMeetingBotSDK
                 return false;
             }
 
-            var sCleanName = CleanUserName(p.Name);
+            //var sCleanName = CleanUserName(p.Name);
 
             waitMsg = $"BOT Not admitting {p} : BAD USER";
             if (BadUsers.ContainsKey(p.UserId) || BadUsers.Values.Contains(p.Name))
@@ -1202,7 +1294,8 @@ namespace ZoomMeetingBotSDK
                 HsParticipantMessages.Remove(waitMsg);
             }
 
-            if (GoodUsers.ContainsKey(sCleanName) && bAdmitKnown)
+            //if (UserLevels.ContainsKey(sCleanName) && bAdmitKnown)
+            if (CheckUserLevel(p.Name, UserLevel.Known) && bAdmitKnown)
             {
                 hostApp.Log(LogType.INF, "BOT Admitting {p} : KNOWN");
                 return Controller.AdmitParticipant(p);
@@ -1272,11 +1365,9 @@ namespace ZoomMeetingBotSDK
                 return false;
             }
 
-            var cleanName = CleanUserName(p.Name);
-
-            GoodUsers.TryGetValue(cleanName, out bool bUserShouldBeCoHost);
-
-            if (!bUserShouldBeCoHost)
+            //var cleanName = CleanUserName(p.Name);
+            //UserLevels.TryGetValue(cleanName, out bool bUserShouldBeCoHost);
+            if (CheckUserLevel(p.Name, UserLevel.CoHost))
             {
                 // Nothing to do
                 return false;
@@ -1568,27 +1659,27 @@ namespace ZoomMeetingBotSDK
 
             string[] a = text.Split(SpaceDelim, 2);
 
-            string sCommand = a[0].ToLower().Substring(1);
+            string command = a[0].ToLower().Substring(1);
 
             // Parse out command argument if given
-            string sTarget = (a.Length == 1) ? null : (a[1].Length == 0 ? null : a[1]);
+            string target = (a.Length == 1) ? null : (a[1].Length == 0 ? null : a[1]);
 
-            // Determine if sender is admin or not
-            GoodUsers.TryGetValue(CleanUserName(from.Name), out bool bAdmin);
+            // Determine if sender is cohost or not
+            //UserLevels.TryGetValue(CleanUserName(from.Name), out bool bAdmin);
 
-            // Non-priviledged commands
-            if (!bAdmin)
+            // Non-privileged commands (User is no a CoHost or Admin)
+            if (!CheckUserLevel(from.Name, UserLevel.CoHost))
             {
                 // Always reply directly to sender here
                 replyTo = from;
 
-                if (sCommand == "topic")
+                if (command == "topic")
                 {
                     SendTopic(replyTo, true);
                     return;
                 }
 
-                if (cfg.BroadcastCommands.TryGetValue(sCommand, out string response))
+                if (cfg.BroadcastCommands.TryGetValue(command, out string response))
                 {
                     //_ = Controller.SendChatMessage(replyTo, response);
                     _ = SendChatAndSpeak(replyTo, response, false);
@@ -1604,23 +1695,23 @@ namespace ZoomMeetingBotSDK
             // Handle priviledged commands
             // ====
 
-            if (cfg.BroadcastCommands.TryGetValue(sCommand, out string broadcastMsg))
+            if (cfg.BroadcastCommands.TryGetValue(command, out string broadcastMsg))
             {
                 DateTime dtNow = DateTime.UtcNow;
 
-                if (BroadcastSentTime.TryGetValue(sCommand, out DateTime dtSentTime))
+                if (BroadcastSentTime.TryGetValue(command, out DateTime dtSentTime))
                 {
                     int guardTime = cfg.BroadcastCommandGuardTimeSecs;
 
                     if (guardTime < 0)
                     {
-                        _ = Controller.SendChatMessage(replyTo, $"{sCommand}: This broadcast message was already sent.");
+                        _ = Controller.SendChatMessage(replyTo, $"{command}: This broadcast message was already sent.");
                         return;
                     }
 
                     if ((guardTime > 0) && (dtNow <= dtSentTime.AddSeconds(cfg.BroadcastCommandGuardTimeSecs)))
                     {
-                        _ = Controller.SendChatMessage(replyTo, $"{sCommand}: This broadcast message was already sent recently. Please try again later.");
+                        _ = Controller.SendChatMessage(replyTo, $"{command}: This broadcast message was already sent recently. Please try again later.");
                         return;
                     }
                 }
@@ -1628,16 +1719,16 @@ namespace ZoomMeetingBotSDK
                 //if (Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, broadcastMsg))
                 if (SendChatAndSpeak(Controller.SpecialParticipant.everyoneInMeeting, broadcastMsg, false))
                 {
-                    BroadcastSentTime[sCommand] = dtNow;
+                    BroadcastSentTime[command] = dtNow;
                 }
 
                 return;
             }
 
             // Priv retrival or set of topic
-            if (sCommand == "topic")
+            if (command == "topic")
             {
-                if (sTarget == null)
+                if (target == null)
                 {
                     _ = SendTopic(replyTo, true);
                     return;
@@ -1646,7 +1737,7 @@ namespace ZoomMeetingBotSDK
                 bool broadcast = false;
                 string reply;
 
-                string[] b = sTarget.Split(SpaceDelim, 2);
+                string[] b = target.Split(SpaceDelim, 2);
 
                 string cmd = b[0].ToLower().TrimStart('/');
 
@@ -1674,19 +1765,19 @@ namespace ZoomMeetingBotSDK
                         Topic = null;
                     }
                 }
-                else if (string.Compare(Topic, sTarget, true) == 0)
+                else if (string.Compare(Topic, target, true) == 0)
                 {
-                    reply = "The topic is already set to: " + sTarget;
+                    reply = "The topic is already set to: " + target;
                 }
                 else if (Topic == null)
                 {
-                    if ((sTarget != null) && (!sTarget.EndsWith(".")))
+                    if ((target != null) && (!target.EndsWith(".")))
                     {
-                        sTarget += ".";
+                        target += ".";
                     }
 
-                    reply = "Topic set to: " + sTarget;
-                    Topic = sTarget;
+                    reply = "Topic set to: " + target;
+                    Topic = target;
                     broadcast = true;
                 }
                 else
@@ -1706,16 +1797,117 @@ namespace ZoomMeetingBotSDK
 
             // All of the following commands require options
 
-            if (sTarget == null)
+            if (target == null)
             {
                 return;
             }
 
+            // Do remember/forget stuff:
+            //   /remember Participant - Remember participant (Will be added to UserLevels)
+            //   /forget Participant - Forget participant (Will be removed from UserLevels completely)
+            //   /remember /admin Participant - Remember participant is admin
+            //   /remember /cohost Participant - Remember participant is co-host
+
+            var before = text;
+            var rftext = FastRegex.Replace(before, @"\s*/remember\s*", string.Empty, RegexOptions.IgnoreCase);
+            var remember = rftext != before;
+
+            before = rftext;
+            rftext = FastRegex.Replace(before, @"\s*/forget\s*", string.Empty, RegexOptions.IgnoreCase);
+            var forget = rftext != before;
+
+            if (remember || forget)
+            {
+                // These commands require admin
+                if (!CheckUserLevel(from.Name, UserLevel.Admin))
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"I'm sorry, but you're not authorized to run that command.");
+                    return;
+                }
+
+                if (remember && forget)
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"I'm pretty smart, but I'm not sure how to remember AND forget at the same time!");
+                    return;
+                }
+
+                before = rftext;
+                rftext = FastRegex.Replace(before, @"\s*/cohost\s*", string.Empty, RegexOptions.IgnoreCase);
+                var cohost = rftext != before;
+
+                before = rftext;
+                rftext = FastRegex.Replace(before, @"\s*/admin\s*", string.Empty, RegexOptions.IgnoreCase);
+                var admin = rftext != before;
+
+                target = rftext;
+                if (rftext.Length == 0)
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"Who do you want me to {(remember ? "remember" : "forget")}?");
+                    return;
+                }
+
+                var oldUserLevel = GetUserLevel(target);
+                var newUserLevel = oldUserLevel;
+
+                if (remember)
+                {
+                    if (admin)
+                    {
+                        newUserLevel = UserLevel.Admin;
+                    }
+                    else if (cohost)
+                    {
+                        newUserLevel = UserLevel.CoHost;
+                    }
+                    else
+                    {
+                        newUserLevel = UserLevel.Known;
+                    }
+                }
+                else if (forget)
+                {
+                    if (admin)
+                    {
+                        newUserLevel = UserLevel.CoHost;
+                    }
+                    else if (cohost)
+                    {
+                        newUserLevel = UserLevel.Known;
+                    }
+                    else
+                    {
+                        newUserLevel = UserLevel.Unknown;
+                    }
+                }
+                else
+                {
+                    throw new Exception("Should never get here");
+                }
+
+                string response;
+                if (oldUserLevel == newUserLevel)
+                {
+                    response = $"{repr(target)} is already {newUserLevel}.";
+                }
+                else
+                {
+                    SetUserLevel(target, newUserLevel);
+
+                    response = $"OK, I'll remember that {repr(target)} is {newUserLevel} instead of {oldUserLevel}.";
+                }
+
+                _ = Controller.SendChatMessage(replyTo, response);
+
+                return;
+            }
+
+            // Do email commands
+
             if (cfg.EmailCommands != null)
             {
-                if (cfg.EmailCommands.TryGetValue(sCommand, out EmailCommandArgs emailCommandArgs))
+                if (cfg.EmailCommands.TryGetValue(command, out EmailCommandArgs emailCommandArgs))
                 {
-                    string[] args = sTarget.Trim().Split(SpaceDelim, 2);
+                    string[] args = target.Trim().Split(SpaceDelim, 2);
                     string subject = emailCommandArgs.Subject;
                     string body = emailCommandArgs.Body;
                     string toAddress = args[0];
@@ -1725,7 +1917,7 @@ namespace ZoomMeetingBotSDK
                     {
                         if (args.Length <= 1)
                         {
-                            _ = Controller.SendChatMessage(replyTo, $"Error: The format of the command is incorrect; Correct example: /{sCommand} {emailCommandArgs.ArgsExample}");
+                            _ = Controller.SendChatMessage(replyTo, $"Error: The format of the command is incorrect; Correct example: /{command} {emailCommandArgs.ArgsExample}");
                             return;
                         }
 
@@ -1736,25 +1928,27 @@ namespace ZoomMeetingBotSDK
 
                     if (SendEmail(subject, body, toAddress))
                     {
-                        _ = Controller.SendChatMessage(replyTo, $"{sCommand}: Successfully sent email to {toAddress}");
+                        _ = Controller.SendChatMessage(replyTo, $"{command}: Successfully sent email to {toAddress}");
                     }
                     else
                     {
-                        _ = Controller.SendChatMessage(replyTo, $"{sCommand}: Failed to send email to {toAddress}");
+                        _ = Controller.SendChatMessage(replyTo, $"{command}: Failed to send email to {toAddress}");
                     }
 
                     return;
                 }
             }
 
-            if ((sCommand == "citadel") || (sCommand == "lockdown") || (sCommand == "passive") || (sCommand == "lock"))
+            // Do security commands
+
+            if ((command == "citadel") || (command == "lockdown") || (command == "passive") || (command == "lock"))
             {
-                if (sCommand == "lock")
+                if (command == "lock")
                 {
-                    sCommand = "lockdown";
+                    command = "lockdown";
                 }
 
-                string sNewMode = sTarget.ToLower().Trim();
+                string sNewMode = target.ToLower().Trim();
                 bool bNewMode;
 
                 if (sNewMode == "on")
@@ -1767,25 +1961,27 @@ namespace ZoomMeetingBotSDK
                 }
                 else
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"Sorry, the {sCommand} command requires either on or off as a parameter");
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, the {command} command requires either on or off as a parameter");
                     return;
                 }
 
-                if (SetMode(sCommand, bNewMode))
+                if (SetMode(command, bNewMode))
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"{sCommand} mode has been changed to {sNewMode}");
+                    _ = Controller.SendChatMessage(replyTo, $"{command} mode has been changed to {sNewMode}");
                 }
                 else
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"{sCommand} mode is already {sNewMode}");
+                    _ = Controller.SendChatMessage(replyTo, $"{command} mode is already {sNewMode}");
                 }
 
                 return;
             }
 
-            if (sCommand == "ids")
+            // ...
+
+            if (command == "ids")
             {
-                string arg = sTarget.ToLower().Trim();
+                string arg = target.ToLower().Trim();
                 bool newModeBool = arg == "on" || arg == "enabled";
                 string newModeStr = newModeBool ? "on" : "off";
 
@@ -1804,9 +2000,9 @@ namespace ZoomMeetingBotSDK
                 _ = Controller.SendChatMessage(replyTo, response);
             }
 
-            if (sCommand == "waitmsg")
+            if (command == "waitmsg")
             {
-                var sWaitMsg = sTarget.Trim();
+                var sWaitMsg = target.Trim();
 
                 if ((sWaitMsg.Length == 0) || (sWaitMsg.ToLower() == "off"))
                 {
@@ -1822,12 +2018,12 @@ namespace ZoomMeetingBotSDK
                 }
                 else if (sWaitMsg == cfg.WaitingRoomAnnouncementMessage)
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"Waiting room message is already set to:\n{sTarget}");
+                    _ = Controller.SendChatMessage(replyTo, $"Waiting room message is already set to:\n{target}");
                 }
                 else
                 {
-                    cfg.WaitingRoomAnnouncementMessage = sTarget.Trim();
-                    _ = Controller.SendChatMessage(replyTo, $"Waiting room message has set to:\n{sTarget}");
+                    cfg.WaitingRoomAnnouncementMessage = target.Trim();
+                    _ = Controller.SendChatMessage(replyTo, $"Waiting room message has set to:\n{target}");
                 }
 
                 return;
@@ -1835,49 +2031,49 @@ namespace ZoomMeetingBotSDK
 
             // Pre-processing for rename action
             string newName = null;
-            if (sCommand == "rename")
+            if (command == "rename")
             {
-                string[] renameArgs = sTarget.Split(new string[] { " to " }, StringSplitOptions.RemoveEmptyEntries);
+                string[] renameArgs = target.Split(new string[] { " to " }, StringSplitOptions.RemoveEmptyEntries);
                 if (renameArgs.Length != 2)
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"Please use the format: /{sCommand} Old Name to New Name\nExample: /{sCommand} iPad User to John Doe");
+                    _ = Controller.SendChatMessage(replyTo, $"Please use the format: /{command} Old Name to New Name\nExample: /{command} iPad User to John Doe");
                     return;
                 }
 
-                sTarget = renameArgs[0];
+                target = renameArgs[0];
                 newName = renameArgs[1];
             }
 
             // Handle special "/speaker off" command
-            if ((sCommand == "speaker") && (sTarget == "off"))
+            if ((command == "speaker") && (target == "off"))
             {
                 SetSpeaker(null, from);
                 return;
             }
 
-            if ((sCommand == "speak") || (sCommand == "say"))
+            if ((command == "speak") || (command == "say"))
             {
-                if (Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, sTarget))
+                if (Controller.SendChatMessage(Controller.SpecialParticipant.everyoneInMeeting, target))
                 {
-                    Sound.Speak(sTarget);
+                    Sound.Speak(target);
                 }
 
                 return;
             }
 
-            if (sCommand == "play")
+            if (command == "play")
             {
-                if (Controller.SendChatMessage(replyTo, $"Playing: {repr(sTarget)}"))
+                if (Controller.SendChatMessage(replyTo, $"Playing: {repr(target)}"))
                 {
-                    Sound.Play(sTarget);
+                    Sound.Play(target);
                 }
 
                 return;
             }
 
-            if (sCommand == "list")
+            if (command == "list")
             {
-                string arg = sTarget.ToLower();
+                string arg = target.ToLower();
                 string response = null;
 
                 if ((arg == "hand") || (arg == "hands"))
@@ -1898,9 +2094,9 @@ namespace ZoomMeetingBotSDK
                 return;
             }
 
-            if ((sCommand == "track") || (sCommand == "tracking"))
+            if ((command == "track") || (command == "tracking"))
             {
-                string arg = sTarget.ToLower();
+                string arg = target.ToLower();
                 string response = null;
 
                 if ((arg == "off") || (arg == "stop") || (arg == "disable"))
@@ -1942,39 +2138,45 @@ namespace ZoomMeetingBotSDK
                 return;
             }
 
+            if (command == "who")
+            {
+                _ = Controller.SendChatMessage(replyTo, $"{repr(target)} is {GetUserLevel(target)}.");
+                return;
+            }
+
             // All of the following commands require a target participant
 
             // If the sender refers to themselves as "me", resolve this to their actual participant name
-            Controller.Participant target = null;
-            if (sTarget.ToLower() == "me")
+            Controller.Participant targetParticipant = null;
+            if (target.ToLower() == "me")
             {
-                target = from;
+                targetParticipant = from;
             }
             else
             {
                 try
                 {
-                    target = Controller.GetParticipantByName(sTarget);
+                    targetParticipant = Controller.GetParticipantByName(target);
                 }
                 catch (ArgumentException)
                 {
                     // TBD: Return userId or some other unique info?
-                    _ = Controller.SendChatMessage(replyTo, $"Sorry, there is more than one participant here named {repr(sTarget)}. I'm not sure which one you mean...");
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, there is more than one participant here named {repr(target)}. I'm not sure which one you mean...");
                     return;
                 }
             }
 
-            if (target == null)
+            if (targetParticipant == null)
             {
                 // TBD: Try regex/partial match, returning results?
-                _ = Controller.SendChatMessage(replyTo, $"Sorry, I don't see anyone named here named {repr(sTarget)}. Remember, Case Matters!");
+                _ = Controller.SendChatMessage(replyTo, $"Sorry, I don't see anyone named here named {repr(target)}. Remember, Case Matters!");
                 return;
             }
 
             // All of the following require a participant target
 
             // Make sure I'm not the target :p
-            if (target.IsMe)
+            if (targetParticipant.IsMe)
             {
                 _ = Controller.SendChatMessage(replyTo, "U Can't Touch This\n* MC Hammer Music *\nhttps://youtu.be/otCpCn0l4Wo");
                 return;
@@ -1985,115 +2187,115 @@ namespace ZoomMeetingBotSDK
             // TBD: Can you rename someone in the waiting room using the SDK?
             if (newName != null)
             {
-                if (target.Name == from.Name)
+                if (targetParticipant.Name == from.Name)
                 {
                     _ = Controller.SendChatMessage(replyTo, "Why don't you just rename yourself?");
                     return;
                 }
 
-                var success = Controller.RenameParticipant(target, newName);
-                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully renamed" : "Failed to rename")} {repr(target.Name)} to {repr(newName)}");
+                var success = Controller.RenameParticipant(targetParticipant, newName);
+                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully renamed" : "Failed to rename")} {repr(targetParticipant.Name)} to {repr(newName)}");
 
                 return;
             }
 
-            if (sCommand == "admit")
+            if (command == "admit")
             {
-                if (target.Status != Controller.ParticipantStatus.Waiting)
+                if (targetParticipant.Status != Controller.ParticipantStatus.Waiting)
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.Name)} is not in the waiting room");
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(targetParticipant.Name)} is not in the waiting room");
                 }
                 else
                 {
-                    var success = Controller.AdmitParticipant(target);
-                    _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully admitted" : "Failed to admit")} {repr(target.Name)}");
+                    var success = Controller.AdmitParticipant(targetParticipant);
+                    _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully admitted" : "Failed to admit")} {repr(targetParticipant.Name)}");
                 }
 
                 return;
             }
 
             // Commands after here require the participant to be attending
-            if (target.Status != Controller.ParticipantStatus.Attending)
+            if (targetParticipant.Status != Controller.ParticipantStatus.Attending)
             {
-                _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.Name)} is not attending");
+                _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(targetParticipant.Name)} is not attending");
                 return;
             }
 
-            if ((sCommand == "cohost") || (sCommand == "promote"))
+            if ((command == "cohost") || (command == "promote"))
             {
-                if (target.IsHost || target.IsCoHost)
+                if (targetParticipant.IsHost || targetParticipant.IsCoHost)
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.Name)} is already Host or Co-Host so cannot be promoted");
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(targetParticipant.Name)} is already Host or Co-Host so cannot be promoted");
                     return;
                 }
-                else if (!target.IsVideoOn)
+                else if (!targetParticipant.IsVideoOn)
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"Sorry, I'm not allowed to Co-Host {repr(target.Name)} because their video is off");
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, I'm not allowed to Co-Host {repr(targetParticipant.Name)} because their video is off");
                     return;
                 }
 
-                var success = Controller.PromoteParticipant(target, Controller.ParticipantRole.CoHost);
-                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully promoted" : "Failed to promote")} {repr(target.Name)}");
+                var success = Controller.PromoteParticipant(targetParticipant, Controller.ParticipantRole.CoHost);
+                _ = Controller.SendChatMessage(replyTo, $"{(success ? "Successfully promoted" : "Failed to promote")} {repr(targetParticipant.Name)}");
 
                 return;
             }
 
-            if (sCommand == "demote")
+            if (command == "demote")
             {
-                if (!target.IsCoHost)
+                if (!targetParticipant.IsCoHost)
                 {
-                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(target.Name)} isn't Co-Host so they cannot be demoted");
+                    _ = Controller.SendChatMessage(replyTo, $"Sorry, {repr(targetParticipant.Name)} isn't Co-Host so they cannot be demoted");
                     return;
                 }
 
                 // Tag this as a bad user so we don't automatically cohost again
-                BadUsers[target.UserId] = target.Name;
+                BadUsers[targetParticipant.UserId] = targetParticipant.Name;
 
-                _ = Controller.SendChatMessage(replyTo, $"{(Controller.DemoteParticipant(target) ? "Successfully demoted" : "Failed to demote")} {repr(target.Name)}");
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.DemoteParticipant(targetParticipant) ? "Successfully demoted" : "Failed to demote")} {repr(targetParticipant.Name)}");
                 return;
             }
 
-            if (sCommand == "mute")
+            if (command == "mute")
             {
                 // TBD: Add /force option so that they cannot unmute
 
-                _ = Controller.SendChatMessage(replyTo, $"{(Controller.MuteParticipant(target) ? "Successfully muted" : "Failed to mute")} {repr(target.Name)}");
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.MuteParticipant(targetParticipant) ? "Successfully muted" : "Failed to mute")} {repr(targetParticipant.Name)}");
                 return;
             }
 
-            if (sCommand == "unmute")
+            if (command == "unmute")
             {
-                _ = Controller.SendChatMessage(replyTo, $"{(Controller.UnmuteParticipant(target) ? "Successfully unmuted" : "Failed to unmute")} {repr(target.Name)}");
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.UnmuteParticipant(targetParticipant) ? "Successfully unmuted" : "Failed to unmute")} {repr(targetParticipant.Name)}");
                 return;
             }
 
-            if ((sCommand == "expel") || (sCommand == "kick"))
+            if ((command == "expel") || (command == "kick"))
             {
-                _ = Controller.SendChatMessage(replyTo, $"{(Controller.ExpelParticipant(target) ? "Successfully expelled" : "Failed to expel")} {repr(target.Name)}");
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.ExpelParticipant(targetParticipant) ? "Successfully expelled" : "Failed to expel")} {repr(targetParticipant.Name)}");
 
                 // Tag this as a bad user so we don't automatically re-admit
-                BadUsers[target.UserId] = target.Name;
+                BadUsers[targetParticipant.UserId] = targetParticipant.Name;
 
                 return;
             }
 
-            if ((sCommand == "wait") || (sCommand == "putwr") || (sCommand == "waitroom") || (sCommand == "waitingroom") || (sCommand == "putinwait") || (sCommand == "putinwaiting") || (sCommand == "putinwaitingroom"))
+            if ((command == "wait") || (command == "putwr") || (command == "waitroom") || (command == "waitingroom") || (command == "putinwait") || (command == "putinwaiting") || (command == "putinwaitingroom"))
             {
-                _ = Controller.SendChatMessage(replyTo, $"{(Controller.PutParticipantInWaitingRoom(target) ? "Successfully put" : "Failed to put")} {repr(target.Name)} in waiting room");
+                _ = Controller.SendChatMessage(replyTo, $"{(Controller.PutParticipantInWaitingRoom(targetParticipant) ? "Successfully put" : "Failed to put")} {repr(targetParticipant.Name)} in waiting room");
 
                 // Tag this as a bad user so we don't automatically re-admit
-                BadUsers[target.UserId] = target.Name;
+                BadUsers[targetParticipant.UserId] = targetParticipant.Name;
 
                 return;
             }
 
-            if (sCommand == "speaker")
+            if (command == "speaker")
             {
-                SetSpeaker(target, from);
+                SetSpeaker(targetParticipant, from);
                 return;
             }
 
-            _ = Controller.SendChatMessage(replyTo, $"Sorry, I don't know the command {sCommand}");
+            _ = Controller.SendChatMessage(replyTo, $"Sorry, I don't know the command {command}");
         }
 
         private void Controller_OnChatMessageReceive(object sender, Controller.OnChatMessageReceiveArgs e)
