@@ -1376,7 +1376,7 @@ namespace ZoomMeetingBotSDK
 
             //var cleanName = CleanUserName(p.Name);
             //UserLevels.TryGetValue(cleanName, out bool bUserShouldBeCoHost);
-            if (CheckUserLevel(p.Name, UserLevel.CoHost))
+            if (!CheckUserLevel(p.Name, UserLevel.CoHost))
             {
                 // Nothing to do
                 return false;
