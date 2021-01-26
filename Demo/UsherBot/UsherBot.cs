@@ -324,17 +324,31 @@ namespace ZoomMeetingBotSDK
             return Controller.SendChatMessage(recipient, response);
         }
 
+        /// <summary>
+        /// Return normalized particpant name in an attempt to minimize variance:
+        ///   1. Convert to lowercase
+        ///   2. Remove one-letter last name abbreviations ("John D." -> "John D")
+        ///   3. Replace runs of spaces with a single space ("John  D" -> "John D")
+        ///   4. Remove known suffixes: (Usher), (DL), (Chair), (Speaker) ("John D (Usher)" -> "John D").
+        /// </summary>
         private static string CleanUserName(string s)
         {
             if (s == null)
             {
                 return null;
             }
-            // 1. Lower-case names for comparison purposes
-            // 2. Remove periods (Chris M. -> Chris M)
-            // 3. Replace runs of spaces with a single space
-            // 4. Remove known suffixes: (Usher), (DL), (Chair), (Speaker)
-            return Regex.Replace(Regex.Replace(s.ToLower().Replace(".", string.Empty), @"\s+", " "), @"\s*\((?:Usher|DL|Chair|Speaker)\)\s*$", string.Empty, RegexOptions.IgnoreCase).Trim();
+
+            //return Regex.Replace(Regex.Replace(s.ToLower().Replace(".", string.Empty), @"\s+", " "), @"\s*\((?:Usher|DL|Chair|Speaker)\)\s*$", string.Empty, RegexOptions.IgnoreCase).Trim();
+            return FastRegex.Replace(
+                FastRegex.Replace(
+                    FastRegex.Replace(
+                        s.ToLower(),
+                        @"(\s[a-z])\.",
+                        "$1"),
+                    @"\s+",
+                    " "),
+                @"\s*\((?:Usher|DL|Chair|Speaker)\)\s*$",
+                string.Empty).Trim();
         }
 
         private static readonly HashSet<string> HsParticipantMessages = new HashSet<string>();
@@ -2106,7 +2120,7 @@ namespace ZoomMeetingBotSDK
             {
                 // If there are only two people in the meeting, isPrivate=true and we can assume they are talking to the bot.
                 //   If there is more than one person in the meeting, isPrivate=false and we check for the bot's name so we can be sure they are talking to it.
-                var withoutMyName = Regex.Replace(text, @"\b" + cfg.MyParticipantName + @"\b", string.Empty, RegexOptions.IgnoreCase);
+                var withoutMyName = FastRegex.Replace(text, @"\b" + cfg.MyParticipantName + @"\b", string.Empty, RegexOptions.IgnoreCase);
                 if ((withoutMyName == text) && (!onlyTwoAttendees))
                 {
                     return;
