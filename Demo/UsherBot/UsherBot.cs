@@ -118,6 +118,7 @@ namespace ZoomMeetingBotSDK
                 WaitingRoomAnnouncementMessage = null;
                 WaitingRoomAnnouncementDelaySecs = 60;
                 IncludeUserIdsInLists = false;
+                BadNameRegex = null;
             }
 
             /// <summary>
@@ -187,9 +188,15 @@ namespace ZoomMeetingBotSDK
             /// Controls including user ids in lists or not.  If on, users are listed like "\"User Name\"#123456"; If off just "User Name".
             /// </summary>
             public bool IncludeUserIdsInLists { get; set; }
+
+            /// <summary>
+            /// A regular expression defining bad participant names. Any participant matching this pattern will not be admitted to the meeting.
+            /// </summary>
+            public string BadNameRegex { get; set; }
         }
 
         public static BotConfigurationSettings cfg = new BotConfigurationSettings();
+        private static Regex badNameRegex = null;
 
         public static bool SetMode(string sName, bool bNewState)
         {
@@ -1073,19 +1080,29 @@ namespace ZoomMeetingBotSDK
                 {
                     hostApp.Log(LogType.DBG, "[UsherBot] ReallyLeaveMeeting - I am host; Trying to find someone to pass it to");
 
+                    // Choose the highest ranking participant to pass it to
+                    //   Rank: 10 * UserLevel + 1 if they are CoHost
+                    // In other words, we'll pick the best alt host in order of preference:
+                    //   Admin + IsCoHost
+                    //   CoHost + IsCoHost
+                    //   Known + IsCoHost
+                    //   IsCoHost
+                    int altHostRank = 0;
                     Controller.Participant altHost = null;
                     foreach (Controller.Participant p in Controller.participants.Values)
                     {
-                        // TBD: Could also verify the participant is GoodUser^
-                        if (p.IsCoHost)
+                        var pUserLevel = GetUserLevel(p.Name);
+                        var pRank = (10 * (int)pUserLevel) + (p.IsCoHost ? 1 : 0);
+
+                        if (pRank > altHostRank)
                         {
+                            altHostRank = pRank;
                             altHost = p;
-                            break;
+                            hostApp.Log(LogType.DBG, $"[UserBot] ReallyLeaveMeeting - Hunting for alt host; Best so far: {repr(p.Name)} userLevel={pUserLevel} isCoHost={p.IsCoHost} rank={pRank}");
                         }
                     }
 
-                    if (altHost == null)
-                    {
+                    if (altHostRank == 0) {
                         hostApp.Log(LogType.ERR, "[UsherBot] ReallyLeaveMeeting - Could not find an alternative host; Ending meeting");
                         endForAll = true;
                     }
@@ -1285,8 +1302,20 @@ namespace ZoomMeetingBotSDK
 
             //var sCleanName = CleanUserName(p.Name);
 
-            waitMsg = $"BOT Not admitting {p} : BAD USER";
+            bool blockUser = false;
             if (BadUsers.ContainsKey(p.UserId) || BadUsers.Values.Contains(p.Name))
+            {
+                blockUser = true;
+                waitMsg = $"BOT Not admitting {p} : BAD USER";
+            }
+
+            if ((badNameRegex != null) && badNameRegex.IsMatch(p.Name))
+            {
+                blockUser = true;
+                waitMsg = $"BOT Not admitting {p} : BAD NAME";
+            }
+
+            if (blockUser)
             {
                 // Make sure we don't display the message more than once
                 if (!HsParticipantMessages.Contains(waitMsg))
@@ -2165,7 +2194,15 @@ namespace ZoomMeetingBotSDK
             {
                 try
                 {
-                    targetParticipant = Controller.GetParticipantByName(target);
+                    if (target.StartsWith("#"))
+                    {
+                        Controller.GetParticipantById(uint.Parse(target.Substring(1)), out targetParticipant, false);
+                    }
+
+                    if (targetParticipant == null)
+                    {
+                        targetParticipant = Controller.GetParticipantByName(target);
+                    }
                 }
                 catch (ArgumentException)
                 {
@@ -2414,6 +2451,19 @@ namespace ZoomMeetingBotSDK
         {
             cfg = DeserializeJson<BotConfigurationSettings>(hostApp.GetSettingsAsJSON());
             ExpandDictionaryPipes(cfg.BroadcastCommands);
+
+            badNameRegex = null;
+            if (cfg.BadNameRegex != null)
+            {
+                try
+                {
+                    badNameRegex = new Regex(cfg.BadNameRegex, RegexOptions.Compiled);
+                }
+                catch (Exception ex)
+                {
+                    hostApp.Log(LogType.ERR, $"Failed to compile BadNameRegex {repr(cfg.BadNameRegex)}: {ex}");
+                }
+            }
         }
     }
 }

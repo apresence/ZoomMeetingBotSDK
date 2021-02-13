@@ -32,7 +32,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -1240,15 +1240,49 @@ namespace ZoomMeetingBotSDK
             ShouldExit = true;
         }
 
+        /// <summary>
+        /// Implement quasi-regex matching for participant names.  Examples:
+        ///   /Joe .*/
+        ///   /joe .*/i
+        /// NOTE: If regex does not match a user, or matches more than one user, it will not be expanded.
+        /// </summary>
+        private static Regex GetNameRegex(string target)
+        {
+            if ((target == null) || (target.Length == 0))
+            {
+                return null;
+            }
+
+
+            var match = Regex.Match(target, "^/(.+)/(.*)$");
+            if (!match.Success)
+            {
+                return null;
+            }
+
+            try
+            {
+                var flags = match.Groups[2].Value.ToLower().Contains("i") ? RegexOptions.IgnoreCase : RegexOptions.None;
+                return new Regex(match.Groups[1].Value, flags);
+            }
+            catch (Exception ex)
+            {
+                hostApp.Log(LogType.WRN, $"{MethodBase.GetCurrentMethod().Name} Exception during regex match: {ex}");
+            }
+
+            return null;
+        }
+
         public static List<Participant> GetParticipantsByName(string name)
         {
             List<Participant> ret = new List<Participant>();
+            Regex re = GetNameRegex(name);
 
             lock (participants)
             {
                 foreach (var p in participants.Values)
                 {
-                    if (p.Name == name)
+                    if ((re == null) ? (p.Name == name) : re.IsMatch(p.Name))
                     {
                         ret.Add(p);
                     }
