@@ -2196,7 +2196,10 @@ namespace ZoomMeetingBotSDK
                 {
                     if (target.StartsWith("#"))
                     {
-                        Controller.GetParticipantById(uint.Parse(target.Substring(1)), out targetParticipant, false);
+                        if (uint.TryParse(target.Substring(1), out uint id))
+                        {
+                            Controller.GetParticipantById(id, out targetParticipant, false);
+                        }
                     }
 
                     if (targetParticipant == null)
