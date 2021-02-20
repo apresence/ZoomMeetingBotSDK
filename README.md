@@ -13,18 +13,12 @@ A reference Bot called "UsherBot" is included, which provides the following feat
 * It can "speak" using text-to-speech
 * It can automatically send emails via Gmail on demand
 
-**Don't bother trying to clone the code just yet!**  While it is already live and managing several meetings, the code is not yet in a state where it can be easily deployed.  I'd hate for someone to clone the code and get frustrated trying to get it to work.
+**Don't bother trying to clone the code just yet!**  While it is already live and managing several meetings, the code is not yet in a state where it can be easily deployed.  I'd hate for someone to clone the code and get frustrated trying to get it to work.  If you're interested in getting it working, shoot me an email and I'll help get you set up.
 
-I'm working on cleaning up the code now, including the following:
+I'm working on the following next:
 - [ ] Create a release that's easy to install, configure and use
 - [ ] Create a sample configuration that's ready to go with minimal tweaking
-- [x] Do not commit private files/information such as zoom username, password, etc. and other content that is not needed
-- [X] Make chat bots pluggable
-- [X] Move SimpleBot chatbot out into it's own DLL
-- [X] Clean up ChatterBot wrapper; the bits are all over the place
-- [X] Add support for direct Zoom account login (Was previously depending on Google SSO)
 - [ ] Create a Quick Start Guide
-- [ ] Re-factor to use the native Windows Zoom SDK which appears to be stable as of Jan 2021
 
 # Background
 
@@ -40,22 +34,22 @@ I have worked on several projects in the past which involved automating GUI appl
 
 It turned out to not be so easy to pull text from Zoom windows due to the way it was implemented, so I started looking into several image recognition libraries.  None of the free ones I could get my hand on had any reliable accuracy level.  I did find some paid ones, but they were prohibitively expensive, and even then they still weren't 100% accurate.
 
-I thought I might have to give up on the whole idea until I discovered that Zoom implements a [UIAutomation](https://docs.microsoft.com/en-us/dotnet/framework/ui-automation/ui-automation-overview) interface.  UIAutomation is primarily used for accessibilty reasons, but is also sometimes used for automated testing.  Basically, it's an interface that allows a client to hook into events and invoke user interface elements in another application.
+I thought I might have to give up on the whole idea until I discovered that Zoom implements a [UIAutomation](https://docs.microsoft.com/en-us/dotnet/framework/ui-automation/ui-automation-overview) interface.  UIAutomation is primarily used for accessibilty reasons, but is also sometimes used for automated testing.  Basically, it's an interface that allows a client to hook into events and invoke user interface elements in another application.  Alas, UIAutomation is inherently slow, and Zoom's implementation was neither complete nor entirely stable.
 
-Alas, UIAutomation is inherently slow, and Zoom's implementation was neither complete nor entirely stable.
+Ultimately, I ended going up with a hybrid approach, using Windows' [SendInput](https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput) API Function to control the app where I could, and UIAutomation where I couldn't.  This worked quite well, but was very slow, and sometimes the timing was off causing some operation to fail, so retries had to be implemented, etc.  I've archived this code into the [uiautomation](/apresence/ZoomMeetingBotSDK/tree/uiautomation) branch.  If you are working on a project that uses UIAutomation and/or the SendInput APIs, you may find referencing this code useful.
 
-Ultimately, I ended going up with a hybrid approach, using Windows' [SendInput](https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput) API Function to control the app where I could, and UIAutomation where I couldn't.
+In January of 2021 or so, I looked into the [Zoom Client C# Wrapper for Windows](https://marketplace.zoom.us/docs/sdk/native-sdks/windows/c-sharp-wrapper) and found that it now had (mostly) what I needed.  After adding a few code fixes of my own, I was able to refactor everything to use this instead of the previous UIAutomation/hybrid method.  The resulting product is _much_ faster, and _much_ more stable.  The one thing that is missing from this SDK is the ability to send messages to participants in the waiting room.  I have [posted a message](https://devforum.zoom.us/t/how-to-send-chat-messages-to-everyone-in-waiting-room/39538/3) on Zoom's support board requesting for this to be added.
 
 # Requirements
 
-A Windows system with an interactive desktop session and a user with administrative rights are required.  The SDK has been tested on Windows 10 and Windows Server 2019.
+This project must be run on a Windows system.  This latest version can be run along side a regular Zoom participant session.  In other words, you can join a meeting as a regular participant on the same system the bot is running on.  However, if you are going to use the bot to automatically manage a meeting for you, I reccomend setting up a dedicated system for this purpose.  Any old laptop/PC with good enough hardware to run Zoom should be fine.  You can also run it on a VM in AWS, Azure or the like.
 
-The SDK works by controlling the [Zoom Meeting Desktop Client for Windows](https://zoom.us/client/latest/ZoomInstaller.exe), which has to be installed.
+The SDK has been tested on Windows 10 and Windows Server 2019.  Since it requires user interface support, Windows Server Core systems are not supported.
 
 If you wish to modify the code, [Visual Studio Community 2019](https://visualstudio.microsoft.com/vs/community/) and the [.NET Framework 4.8](https://devblogs.microsoft.com/dotnet/announcing-the-net-framework-4-8/) SDK are required.
 
 # Caveats
 
-Since the SDK currently works by manipulating the Zoom user interface, changes to the Zoom Meeting Client can cause it to stop working.  For example, if it's looking for a dialog named "Rename User" that gets changed at some point to "Change User Name", the SDK will not be able to find it.  Some steps have been taken to detect and compensate for these changes, but from time to time you can expect it to stop working when Zoom releases an incompatible update.
+This project uses the [Zoom Client C# Wrapper for Windows](https://marketplace.zoom.us/docs/sdk/native-sdks/windows/c-sharp-wrapper) which isn't actively maintained or supported by Zoom.  While I have been maintaining my own copy and updating it as needed, there is no guarantee that a new release of Zoom won't render this SDK completely unusable.
 
-In other words: **This is a highly experimental project that should not be used in production.**
+In other words: **This is an experimental, for-fun project.**
