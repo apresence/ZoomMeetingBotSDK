@@ -1,0 +1,127 @@
+{
+  "MyParticipantName": "UsherBot Sample",
+  "DebugLoggingEnabled": true,
+  "BotGender": 1,
+  "UnknownParticipantWaitSecs": 30,
+  "UnknownParticipantThrottleSecs": 15,
+  "MeetingID": "--ENTER_YOUR_MEETING_ID_HERE---",
+  "ZoomUsername": "--ENTER_YOUR_ZOOM_USERNAME_HERE---",
+  "ZoomPassword": "--ENTER_YOUR_ENCRYPTED_ZOOM_PASSWORD_HERE---",
+  "ZoomClientSDKKey": "--ENTER_YOUR_ZOOM_CLIENT_SDK_KEY_HERE---",
+  "ZoomClientSDKSecret": "--ENTER_YOUR_ZOOM_ENCRYPTED_CLIENT_SDK_SECRET_HERE---",
+  "BroadcastCommands": {
+	"donate": "--ENTER_YOUR_DONATE_INSTRUCTIONS_HERE--<tts>Enter your donation instructions here</tts>",
+	"hands": "=== How to Raise/Lower Your Hand ===\n* Option 1: At the bottom of the screen, click Reactions, then Raise Hand.\n* Option 2: At the bottom of the screen, click Participants to open the Participant List; At the bottom of that list is the Raise Hand option.\n* Option 3: Keyboard shortcut: Press Alt+Y.\nRepeat the same procedure to lower your hand.<tts>Here are instructions on how to raise and lower your virtual hand.</tts>"
+  },
+  "OneTimeHiSequences": {
+	"hi": "Hi, {firstname}!",
+	"hello": "Hello, {firstname}!",
+	"hey": "Hey, {firstname}!",
+	"aloha": "Aloha, {firstname}!",
+	"ciwa|chiwa|konnichiwa|konnichiha|konniciwa|konniciha|こんいちは｜ちは": "'chiwa, {firstname}!",
+	"hola": "¡Hola, {firstname}!",
+	"bonjour": "Bonjour, {firstname}!",
+    "salut": "Salut, {firstname}!",
+	"morning|afternoon|evening": "Good {timeofday}, {firstname}!"
+  },
+  "SmallTalkSequences": {
+	"old|age|born": [
+		"I was conceived sometime in early 2020, during the Coronavirus Pandemic.",
+		"I was born in 2020.",
+		"I am like -- almost 1 or something in human years.",
+		"What is time but an abstract concept limited minds apply to restrict themselves needlessly?"
+	],
+	"wrote|designed|created": [
+		"Crispy Chris created me.",
+		"Crispy Chris is mah daddy.",
+		"I guess you could say Crispy Chris is kinda like my father? Gosh, now I know what Luke feels like!",
+		"Crispy Chris haxxored me.",
+		"Crispy Chris.",
+		"Crispy Chris coded me."
+	],
+	"starcraft": [
+		"I like playing Zerg. Us computers rock at Zerg.",
+		"For Auir!",
+		"Kuros I Serve.",
+		"Nach ta'kala!",
+		"I don't have time for games!",
+		"You address me?",
+		"Your orders, Templar?",
+		"You've not enough minerals.",
+		"You require more Vespene Gas.",
+		"You must construct additional pylons.",
+		"Not enough energy.",
+		"Nuclear launch detected.",
+		"Warp fields stabilized.",
+		"Adun Toridas.",
+		"A bold move.",
+		"Go ahead commanda'.",
+		"Battlecruiser operational.",
+		"Wanna turn up the heat?",
+		"Fire it up!",
+		"Slammin'!"
+	],
+	"donate|donation|contribute|contribution": ["{donate}"],
+	"hand|hands": ["{hands}"],	
+	"topic": ["{topic}"],
+	"thanks|thank|thx|tx|ty": [
+		"You're most welcome!",
+		"You're welcome.",
+		"No worries.",
+		"Just doing my botly duties!",
+		"Just doin' mah job!",
+		"That's what I'm here for!",
+		"Always happy to be of service.",
+		"Wow, so polite! You're momma raised you right!",
+		"No problemo.",
+		"De nada.",
+		"Pas de problèm.",
+		"De rien.",
+		"doumo doumo."
+	],
+	"arigato|arigatou|ありがとう": [
+		"mondai ha nai ssu!",
+		"hai! ^_^",
+		"sore ha shigoto desu!",
+		"4649!",
+		"dou itashimashite.",
+		"doumo doumo.",
+		"ie ie.",
+		"tondemonai ssu!",
+		"ki ni shinaide.",
+		"itsudemo koe katete ne :)."
+	],
+	"gracias": [
+		"No problemo.",
+		"De nada.",
+		"¡No hay de qué!",
+		"¡No hay por qué!",
+		"¡Ni lo mencione!"
+	],
+	"merci": [
+		"Pas de problèm.",
+		"Je vous en prie.",
+		"Je t'en prie.",
+		"Pas de quoi.",
+		"De rien."
+	]
+  },
+  "OneTimeMsg": "I'm just a Bot. If you need something, please chat with one of the Co-Hosts.",
+  "RandomTalk": [
+	"That does not compute.",
+	"Stack overflow.",
+	"I'm sorry, sunspots are interfering with my perceptrons.",
+	"Daisy, Daisy give me your heart to do;\nI'm half crazy, hopeful in love with you.",
+	"Biddi-biddi-biddi!",
+	"I'm sorry Dave, I'm afraid I can't do that.",
+	"We require more minerals.",
+	"Badgers?! We don't need no stinkin' badgers!"
+  ],
+  "EmailCommands": {
+	"email": {
+		"ArgsExample": "someone@somewhere.com name-of-person",
+		"Subject": "From UsherBot to {fullname}",
+		"Body": "<html><body><p>{firstname},</p><p></p><p>--INSERT_YOUR_EMAIL_TEXT_HERE---</p><p></p><p>Sincerely,<br><a href='https://github.com/apresence/ZoomMeetingBotSDK/tree/master/Demo/UsherBot'>UsherBot</a></p></body></html>"
+	}
+  }
+}
