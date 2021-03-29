@@ -47,7 +47,7 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\ZoomJWT\bin\Release\ZoomJWT.dll</HintPath>
     </Reference>
-    <Reference Include="zoom_sdk_dotnet_wrap, Version=1.0.7681.7102, Culture=neutral, processorArchitecture=x86">
+    <Reference Include="zoom_sdk_dotnet_wrap, Version=1.0.7757.42676, Culture=neutral, processorArchitecture=x86">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\bin\Debug\zoom_sdk_dotnet_wrap.dll</HintPath>
     </Reference>
