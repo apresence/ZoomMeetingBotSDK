@@ -51,7 +51,13 @@
         {
             if (workDir == null)
             {
-                workDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                // We'll store config files and the like in LocalApplicationData so that the app does not have to run with Administrator privileges.
+                //workDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                workDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "\\UsherBot";
+                if (!Directory.Exists(workDir))
+                {
+                    Directory.CreateDirectory(workDir);
+                }
             }
 
             LoadSettings();
@@ -171,7 +177,8 @@
 
         public override void Log(string sMessage)
         {
-            string n = "UsherBot.Log";
+            DateTime nowDT = DateTime.UtcNow;
+            string n = $"{workDir}\\UsherBot-{nowDT:yyyy-MM-dd}.Log";
 
             lock (LogLock)
             {

@@ -14,7 +14,7 @@ There's a strange sequence with joining the meeting sometimes.  Figure out how t
   2021-01-18 13:14:39.717 INF Participant "Crispy Chris"#16928768 joined the meeting
   2021-01-18 13:14:39.723 INF chatBot SimpleBot > "Crispy Chris"#16928768: "Good {timeofday}, {firstname}!"
   2021-01-18 13:14:39.743 INF BOT Promoting "Crispy Chris"#16928768 to Co-host
-  2021-01-18 13:14:39.753 DBG chatMsgNotification from="UsherBot"#16778240 to="Crispy Chris"#16928768 isToEveryone=False text="Good morning, Crispy! Today's topic: Today's Reading:  BB, pg. 301 Physician Heal Thyself."
+  2021-01-18 13:14:39.753 DBG chatMsgNotification from="UsherBot"#16778240 to="Crispy Chris"#16928768 isToEveryone=False text="Good morning, Crispy! Today's topic: ..."
   2021-01-18 13:14:39.806 INF Zoom_OnCoHostChangeNotification p="Crispy Chris"#16928768 newRole=USERROLE_COHOST
 - 2021-01-18 13:14:42.198 DBG Zoom_OnUserLeft ids=[16928768] <== Leave Meeting
   2021-01-18 13:14:42.203 INF Participant "Crispy Chris"#16928768 left the meeting <== 2nd ID
@@ -226,15 +226,29 @@ namespace ZoomMeetingBotSDK
             }
         }
 
+        /*
         public static void Zoom_OnLoginRet(LOGINSTATUS ret, IAccountInfo pAccountInfo)
         {
             if (pAccountInfo == null)
             {
-                hostApp.Log(LogType.DBG, $"login ret={ret}");
+                hostApp.Log(LogType.DBG, $"login ret={ret} {{legacy}}");
             }
             else
             {
-                hostApp.Log(LogType.DBG, $"login ret={ret} account={repr(pAccountInfo.GetDisplayName())} type={repr(pAccountInfo.GetLoginType())}");
+                hostApp.Log(LogType.DBG, $"login ret={ret} account={repr(pAccountInfo.GetDisplayName())} type={repr(pAccountInfo.GetLoginType())} {{legacy}}");
+            }
+        }
+        */
+
+        public static void Zoom_OnLoginReturnWithReason(LOGINSTATUS ret, IAccountInfo pAccountInfo, LoginFailReason reason)
+        {
+            if (pAccountInfo == null)
+            {
+                hostApp.Log(LogType.DBG, $"login ret={ret} reason={reason}");
+            }
+            else
+            {
+                hostApp.Log(LogType.DBG, $"login ret={ret} account={repr(pAccountInfo.GetDisplayName())} type={repr(pAccountInfo.GetLoginType())} reason={reason}");
             }
 
             if ((ret == LOGINSTATUS.LOGIN_PROCESSING) || (ret == LOGINSTATUS.LOGIN_IDLE))
@@ -836,7 +850,8 @@ namespace ZoomMeetingBotSDK
             hostApp.Log(LogType.DBG, "Authorizing");
             authService = zoom.GetAuthServiceWrap();
             authService.Add_CB_onAuthenticationReturn(Zoom_OnAuthenticationReturn);
-            authService.Add_CB_onLoginRet(Zoom_OnLoginRet);
+            //authService.Add_CB_onLoginRet(Zoom_OnLoginRet);
+            authService.Add_CB_onLoginReturnWithReason(Zoom_OnLoginReturnWithReason);
             authService.Add_CB_onLogout(Zoom_OnLogout);
 
             /*
@@ -1358,13 +1373,6 @@ namespace ZoomMeetingBotSDK
         [MethodImplAttribute(MethodImplOptions.NoInlining)]
         public static bool SendChatMessage(Participant to, string text)
         {
-            // NOTE: Even though sending to everyone in the waiting room is available in the GUI, it is not yet available via the SDK.
-            // In the future, it will likely be implemented with a special userId value == SpecialParticipant.everyoneInWaitingRoom.UserId.
-            // For more details, see:
-            //   https://devforum.zoom.us/t/how-to-send-chat-messages-to-everyone-in-waiting-room/39538
-            // One alternative might have been to simulate mouse clicks and keystrokes to the chat interface.  Unfortunately, I tried this
-            //   and, while in SDK mode text can be pasted into the text box, however the Enter key is ignored, so there is no way to send
-            //   the message.
             try
             {
                 var sdkErr = SDKError.SDKERR_UNKNOWN;
@@ -1378,7 +1386,24 @@ namespace ZoomMeetingBotSDK
                         Thread.Sleep(i * 1000);
                     }
 
-                    sdkErr = chatController.SendChatTo(to.UserId, text);
+                    // CMM 2021.03.29 - BOM - SDK 5.4.54802.0124 - This version added the new function SendChatMsgTo with "type" input
+                    // sdkErr = chatController.SendChatTo(to.UserId, text);
+
+                    SDKChatMessageType type;
+                    if (to == SpecialParticipant.everyoneInMeeting)
+                    {
+                        type = SDKChatMessageType.SDKChatMessageType_To_All;
+                    }
+                    else if (to == SpecialParticipant.everyoneInWaitingRoom)
+                    {
+                        type = SDKChatMessageType.SDKChatMessageType_To_WaitingRoomUsers;
+                    }
+                    else
+                    {
+                        type = SDKChatMessageType.SDKChatMessageType_To_Individual;
+                    }
+
+                    sdkErr = chatController.SendChatMsgTo(text, to.UserId, type);
                     if (sdkErr != SDKError.SDKERR_TOO_FREQUENT_CALL)
                     {
                         break;
