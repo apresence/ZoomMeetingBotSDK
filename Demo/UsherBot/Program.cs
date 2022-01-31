@@ -21,6 +21,10 @@
 // - Strip html tags from responses
 // - Strip emojis that are not recognized by Zoom from responses
 // TBD:
+// 2022:
+// - Add "AutoCoHost" user level. Only automatically cohost users in that list. Regular "CoHost"s will have to request it on demand
+// - Fix chatbot AI issue
+// ---
 // - Any way to handle users with duplicate names? Idea: Rename dups to #2, #3, etc. Could also use hash of avatar to distinguish
 // - Create & move IChatBot and ILogging interfaces out into separate class DLL
 // - Move specific ChatBot implementations out into their own DLLs
