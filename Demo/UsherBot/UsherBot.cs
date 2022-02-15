@@ -1854,6 +1854,7 @@ namespace ZoomMeetingBotSDK
             //   /forget Participant - Forget participant (Will be removed from UserLevels completely)
             //   /remember /admin Participant - Remember participant is admin
             //   /remember /cohost Participant - Remember participant is co-host
+            //   /remember /cohost /auto Participant - Remember participant is auto co-host
 
             var before = text;
             var rftext = FastRegex.Replace(before, @"\s*/remember\s*", string.Empty, RegexOptions.IgnoreCase);
@@ -1862,6 +1863,10 @@ namespace ZoomMeetingBotSDK
             before = rftext;
             rftext = FastRegex.Replace(before, @"\s*/forget\s*", string.Empty, RegexOptions.IgnoreCase);
             var forget = rftext != before;
+
+            before = rftext;
+            rftext = FastRegex.Replace(before, @"\s*/auto\s*", string.Empty, RegexOptions.IgnoreCase);
+            var auto = rftext != before;
 
             if (remember || forget)
             {
@@ -1904,7 +1909,14 @@ namespace ZoomMeetingBotSDK
                     }
                     else if (cohost)
                     {
-                        newUserLevel = UserLevel.CoHost;
+                        if (auto)
+                        {
+                            newUserLevel = UserLevel.AutoCoHost;
+                        }
+                        else
+                        {
+                            newUserLevel = UserLevel.CoHost;
+                        }
                     }
                     else
                     {
@@ -1919,7 +1931,14 @@ namespace ZoomMeetingBotSDK
                     }
                     else if (cohost)
                     {
-                        newUserLevel = UserLevel.Known;
+                        if (auto)
+                        {
+                            newUserLevel = UserLevel.CoHost;
+                        }
+                        else
+                        {
+                            newUserLevel = UserLevel.Known;
+                        }
                     }
                     else
                     {
