@@ -711,6 +711,10 @@ namespace ZoomMeetingBotSDK
                         {
                             line += '^';
                         }
+                        else if (userLevel == UserLevel.AutoCoHost)
+                        {
+                            line += '%';
+                        }
 
                         sw.WriteLine(line);
                     }
