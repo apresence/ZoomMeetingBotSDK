@@ -228,6 +228,50 @@ namespace ZoomMeetingBotSDK
                 return 0;
             }
 
+            if (Array.IndexOf(args, "/unprotect") != -1)
+            {
+                Console.WriteLine("Protected Value:");
+
+                StringBuilder pass = new StringBuilder();
+                while (true)
+                {
+                    ConsoleKeyInfo cki = Console.ReadKey(true);
+                    if (cki.Key == ConsoleKey.Enter)
+                    {
+                        break;
+                    }
+                    else if (cki.Key == ConsoleKey.Backspace)
+                    {
+                        if (pass.Length > 0)
+                        {
+                            pass.Remove(pass.Length - 1, 1);
+                            Console.Write("\b \b");
+                        }
+                    }
+                    else if (cki.KeyChar != '\u0000') // KeyChar == '\u0000' if the key pressed does not correspond to a printable character, e.g. F1, Pause-Break, etc
+                    {
+                        pass.Append(cki.KeyChar);
+                        Console.Write("*");
+                    }
+                }
+
+                Console.WriteLine();
+
+                string passString = pass.ToString();
+
+                string unprot = ProtectedString.Unprotect(passString);
+
+                Console.WriteLine($"\nUnprotected Value:\n{unprot}");
+
+                /*
+                Console.WriteLine();
+                Console.WriteLine("Press ENTER to exit");
+                Console.ReadLine();
+                */
+
+                return 0;
+            }
+
             if (Array.IndexOf(args, "/command") != -1)
             {
                 List<string> commands = new List<string>();

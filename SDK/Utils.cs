@@ -21,6 +21,7 @@
         /// Since I don't plan on using it often, I've chosen the shared/locking method.
         /// </summary>
         //private static JavaScriptSerializer serializer = new JavaScriptSerializer();
+        
 
         /// <summary>
         /// Deserialize JSON string to typed object.
@@ -39,6 +40,14 @@
         public static string SerializeJson<T>(T obj)
         {
             return JsonConvert.SerializeObject(obj, Formatting.Indented);
+        }
+
+        /// <summary>
+        /// Deserialize JSON string to a Dictionary object.
+        /// </summary>
+        public static Dictionary<string, string> DeserializeJsonToDict(string json)
+        {
+            return JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
         }
 
         /// <summary>

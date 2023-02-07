@@ -69,19 +69,21 @@ namespace ZoomMeetingBotSDK
         [Flags]
         public enum BotAutomationFlag
         {
-            None                 = 0b00000000000,
-            SendTopicOnJoin      = 0b00000000001,
-            RenameMyself         = 0b00000000010,
-            ReclaimHost          = 0b00000000100,
-            ProcessParticipants  = 0b00000001000,
-            ProcessChat          = 0b00000010000,
-            CoHostKnown          = 0b00000100000,
-            AdmitKnown           = 0b00001000000,
-            AdmitOthers          = 0b00010000000,
-            Converse             = 0b00100000000,
-            Speak                = 0b01000000000,
-            UnmuteMyself         = 0b10000000000,
-            All                  = 0b11111111111,
+            None                 = 0b0000000000000000,
+            SendTopicOnJoin      = 0b0000000000000001,
+            RenameMyself         = 0b0000000000000010,
+            ReclaimHost          = 0b0000000000000100,
+            ProcessParticipants  = 0b0000000000001000,
+            ProcessChat          = 0b0000000000010000,
+            CoHostKnown          = 0b0000000000100000,
+            AdmitKnown           = 0b0000000001000000,
+            AdmitOthers          = 0b0000000010000000,
+            Converse             = 0b0000000100000000,
+            Speak                = 0b0000001000000000,
+            UnmuteMyself         = 0b0000010000000000,
+            StartMyVideo         = 0b0000100000000000,
+            RespondToPublicMsgs  = 0b0001000000000000,
+            All                  = 0b1111111111111111,
         }
 
         public class EmailCommandArgs
@@ -112,6 +114,8 @@ namespace ZoomMeetingBotSDK
                 UnknownParticipantWaitSecs = 30;
                 MyParticipantName = "UsherBot";
                 BotAutomationFlags = BotAutomationFlag.All;
+                BotAutomationEnable = null;
+                BotAutomationDisable = null;
                 MeetingID = null;
                 BroadcastCommands = new Dictionary<string, string>();
                 BroadcastCommandGuardTimeSecs = 300;
@@ -151,6 +155,16 @@ namespace ZoomMeetingBotSDK
             /// A set of flags that controls which Bot automation is enabled and disabled.  See BotAutomationFlag enum for further details.
             /// </summary>
             public BotAutomationFlag BotAutomationFlags { get; set; }
+
+            /// <summary>
+            /// A comma-delimited list of bot features to enable.  List can be number and/or name of feature.  See BotAutomationFlag enum for further details.
+            /// </summary>
+            public string BotAutomationEnable { get; set; }
+
+            /// <summary>
+            /// A comma-delimited list of bot features to disable.  List can be number and/or name of feature.  See BotAutomationFlag enum for further details.
+            /// </summary>
+            public string BotAutomationDisable { get; set; }
 
             /// <summary>
             /// ID of the meeting to join.
@@ -417,7 +431,22 @@ namespace ZoomMeetingBotSDK
                 {
                     // Unmute myself
                     hostApp.Log(LogType.INF, "BOT Unmuting myself");
-                    _ = Controller.UnmuteParticipant(Controller.me);
+                    if (!Controller.UnmuteParticipant(Controller.me))
+                    {
+                        hostApp.Log(LogType.WRN, "BOT Could not unmute myself; Giving up");
+                        cfg.BotAutomationFlags ^= BotAutomationFlag.UnmuteMyself;
+                    }
+                }
+
+                if (((cfg.BotAutomationFlags & BotAutomationFlag.StartMyVideo) != 0) && !Controller.me.IsVideoOn)
+                {
+                    // Start my video
+                    hostApp.Log(LogType.INF, "BOT Starting my video");
+                    if (!Controller.StartVideo())
+                    {
+                        hostApp.Log(LogType.WRN, "BOT Could not start my video; Giving up");
+                        cfg.BotAutomationFlags ^= BotAutomationFlag.StartMyVideo;
+                    }
                 }
 
             }
@@ -517,10 +546,8 @@ namespace ZoomMeetingBotSDK
                 if (idx != -1)
                 {
                     FirstParticipantGreeted = plist[idx].Name;
-                    var msg = ChatBotConverse("_onetimehi_", plist[idx], "SimpleBot"); // Say "hi"
-
-                    Thread.Sleep(3000);
-
+                    var msg = ChatBotConverse("_onetimehi_", plist[idx], "SimpleBot", true); // Say "hi"
+                    
                     Sound.Play("bootup");
 
                     Thread.Sleep(3000);
@@ -1675,6 +1702,12 @@ namespace ZoomMeetingBotSDK
             // All commands start with "/"; Treat everything else as small talk
             if (!text.StartsWith("/"))
             {
+                // Only respond to public messages if configured to do so
+                if (((cfg.BotAutomationFlags & BotAutomationFlag.RespondToPublicMsgs) == 0) && (!isPrivate))
+                {
+                    return;
+                }
+
                 var response = ChatBotConverse(text, from, null, isToEveryone);
 
                 if (response == null)
@@ -1845,6 +1878,23 @@ namespace ZoomMeetingBotSDK
 
                 return;
             }
+
+            if ((command == "quit") || (command == "exit") || (command == "leave"))
+            {
+                // These commands require admin
+                if (!CheckUserLevel(from.Name, UserLevel.Admin))
+                {
+                    _ = Controller.SendChatMessage(replyTo, $"I'm sorry, but you're not authorized to run that command.");
+                    return;
+                }
+
+                hostApp.Log(LogType.INF, "Received {0} command", command);
+
+                _ = Controller.SendChatMessage(replyTo, $"Leaving meeting.");
+
+                UsherBot.LeaveMeeting(false);
+            }
+
 
             // All of the following commands require options
 
@@ -2498,6 +2548,21 @@ namespace ZoomMeetingBotSDK
                 {
                     hostApp.Log(LogType.ERR, $"Failed to compile BadNameRegex {repr(cfg.BadNameRegex)}: {ex}");
                 }
+            }
+
+            // Parse bot automation flags
+            BotAutomationFlag bafs;
+
+            if (BotAutomationFlag.TryParse(cfg.BotAutomationEnable, out bafs))
+            {
+                hostApp.Log(LogType.INF, $"Enabling bot automation(s): {repr(cfg.BotAutomationEnable)}");
+                cfg.BotAutomationFlags |= bafs;
+            }
+
+            if (BotAutomationFlag.TryParse(cfg.BotAutomationDisable, out bafs))
+            {
+                hostApp.Log(LogType.INF, $"Disabling bot automation(s): {repr(cfg.BotAutomationDisable)}");
+                cfg.BotAutomationFlags &= ~bafs;
             }
         }
     }

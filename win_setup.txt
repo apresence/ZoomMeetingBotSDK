@@ -30,6 +30,7 @@
     - Hover mouse at the bottom, click the settings sprocket, click "Virtual camera", Add, for Description put UsherBot, click Ok
     - Hit Stop, then Play
     - Close Webcamoid
+    Name: UBVCam1 (?)
 - (AWS) Set up timezone, ex: tzutil /s "Eastern Standard Time"
 - Go to Task Scheduler, create a folder named "UsherBot", import the Tasks xml files
   - Change user to UsherBot (since it changes for each computer)

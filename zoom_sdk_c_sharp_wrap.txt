@@ -1,0 +1,83 @@
+This project depends on the Zoom Meeting SDK C# Wrapper.  Details here:
+https://marketplace.zoom.us/docs/sdk/native-sdks/windows/c-sharp-wrapper/
+
+Note that Zoom enforces minimum SDK versions, so the C# Wrapper must be updated from time to time.  Details here:
+https://marketplace.zoom.us/docs/sdk/overview/minimum-version/
+
+There are often breaking changes in the API. Details here:
+https://devsupport.zoom.us/hc/en-us/articles/9564556977933-How-to-update-your-SDKs-to-newer-versions
+
+Setup:
+
+- Download the latest version of the SDK and extract it somewhere. In my dev environment, I extract it to a 3rdparty folder. Ex: 3rdparty\zoom-c-sharp-wrapper-5.12.2.9319
+
+- Open the README.md file from the extracted folder and review the additional requirements there
+
+- Open x86\zoom_sdk_csharp_wrap\zoom_sdk_c_sharp_wrap.sln in Visual Studio 2022
+
+  - Retarget Projects:
+    - Windows SDK Version: Pick whichever ends with "(latest installed version)"
+    - Platform Toolset: Pick the Upgrade option. For example, "Upgrade to v143", but this may differ on your system
+
+  - Change the project's solution configuration to "Release" and platform to "x86"
+
+  - Right-click on zoom_sdk_dotnet_wrap, then select Build > Rebuild
+
+- UsherBot uses some features of the SDK that are not included in the wrapper by default.  In order to add these features, code modifications to the following .cpp/.h files are necessary:
+
+  git diff -p --no-index -- x86\zoom_sdk_c_sharp_wrap\%1 x64\zoom_sdk_c_sharp_wrap\%1 > %~nx1.patch
+  git apply --unsafe-paths meeting_participants_ctrl_donet_wrap.cpp.patch
+
+  TODO: Generate a diff --> https://stackoverflow.com/questions/16683121/git-diff-between-two-different-files
+
+  auth_service_dotnet_wrap - Only client-side
+	LoginFailReason --> LOGINFAILREASON
+	onLoginReturnWithReason --> onLoginRet
+
+  meeting_chat_dotnet_wrap - Only client-side
+	SendChatMessageTo - GOOD!
+	SDKChatMessageType -> ChatMessageType
+	wrap\meeting_chat_wrap
+
+  meeting_participants_ctrl_donet_wrap
+	AllowParticipantsToUnmuteSelf, IsParticipantsRenameAllowed, AllowParticipantsToRename, IsParticipantsUnmuteSelfAllowed, AskAllToUnmute, onCoHostChangeNotification
+	wrap\meeting_service_components_wrap\meeting_participants_ctrl_wrap
+
+  meeting_ui_ctrl_dotnet_wrap
+	SetMeetingTopic
+	wrap\meeting_service_components_wrap\meeting_ui_ctrl_wrap
+		DEFINE_FUNC_1(SetMeetingTopic, SDKError, const wchar_t*, meetingtopic)
+
+  zoom_sdk_dotnet_wrap_def
+
+- Compile the Zoom C# Wrapper SDK
+
+- Copy the contents of x86\bin into the bin\Debug directory of ZoomMeetingBotSDK
+
+
+
+	virtual SDKError AllowParticipantsToRename(bool bAllow) = 0;
+
+	virtual bool IsParticipantsRenameAllowed() = 0;
+
+	virtual SDKError AllowParticipantsToUnmuteSelf(bool bAllow) = 0;
+
+	virtual bool IsParticipantsUnmuteSelfAllowed() = 0;
+
+	virtual SDKError AskAllToUnmute() = 0;
+
+	/// \brief Allowing the regular attendees to use chat, it can only be used in regular meeetings(no webinar or bo).
+	/// \param bAllow TRUE indicates Allowing the regular attendees to use chat. 
+	/// \return If the function succeeds, the return value is SDKErr_Success.
+	///Otherwise failed. To get extended error information, see \link SDKError \endlink enum.
+	/// \remarks Valid for both ZOOM style and user custom interface mode..
+	virtual SDKError AllowParticipantsToChat(bool bAllow) = 0;
+
+	/// \brief  Check whether the current meeting allows participants to chat, it can only be used in regular meeetings(no webinar or bo)..
+	/// \return If allows participants to chat, the return value is true.
+	/// \remarks Valid for both ZOOM style and user custom interface mode..
+	virtual bool IsParticipantAllowedToChat() = 0;
+
+- By default, config file is loaded from %appdata%\..\Local\UsherBot\settings.json
+
+Nuget Install-Package Microsoft.IdentityModel.Protocols.WsFederation 

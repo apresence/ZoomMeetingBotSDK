@@ -28,23 +28,24 @@ Maybe implement a guard time for chat messages/activites?
 
 */
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using ZOOM_SDK_DOTNET_WRAP;
-using static ZoomMeetingBotSDK.Utils;
-using static ZoomJWT.CZoomJWT;
-using System.Runtime.CompilerServices;
-using System.Diagnostics;
-using System.ComponentModel;
-
 namespace ZoomMeetingBotSDK
 {
+    using System;
+    using System.Collections.Generic;
+    //using System.Linq;
+    using System.Reflection;
+    using System.Text.RegularExpressions;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using System.Windows.Forms;
+    using System.Runtime.CompilerServices;
+    using System.Diagnostics;
+    //using System.ComponentModel;
+
+    using ZOOM_SDK_DOTNET_WRAP;
+    using ZDV.Zoom;
+    using static ZoomMeetingBotSDK.Utils;
+
     public static class Controller
     {
         /*
@@ -118,6 +119,21 @@ namespace ZoomMeetingBotSDK
             /// activeaudio: A; None; B; None; A B; None... it will look more like talkers: A; talkers: AB; talkers: None.
             /// </summary>
             public int ActiveAudioDebounceTimeInMS { get; set; }
+
+            /// <summary>
+            /// The Zoom Client OAuth Account ID.
+            /// </summary>
+            public string ZoomOAuthAccountID { get; set; }
+
+            /// <summary>
+            /// The Zoom Client OAuth Client ID.
+            /// </summary>
+            public string ZoomOAuthClientID { get; set; }
+
+            /// <summary>
+            /// The Zoom Client OAuth Client Secret.
+            /// </summary>
+            public string ZoomOAuthClientSecret { get; set; }
         }
         public static ControllerConfigurationSettings cfg = new ControllerConfigurationSettings();
 
@@ -206,6 +222,7 @@ namespace ZoomMeetingBotSDK
                 throw new Exception($"Zoom Authentication Failed; ret={ret}");
             }
 
+            /* Deprecated login process for API v5.4.x
             hostApp.Log(LogType.DBG, "Logging in");
             var loginParam = new LoginParam4Email()
             {
@@ -224,6 +241,33 @@ namespace ZoomMeetingBotSDK
             {
                 throw new Exception($"authService.Login failed; rc={sdkErr}");
             }
+            */
+
+            /*
+            hostApp.Log(LogType.DBG, "Joining meeting");
+
+
+            var joinParam = new JoinParam4NormalUser()
+            {
+                meetingNumber = UInt64.Parse(cfg.MeetingID),
+                userName = cfg.ZoomUsername,
+                psw = ProtectedString.Unprotect(cfg.ZoomPassword),
+                isAudioOff = false,
+                isVideoOff = false,
+            };
+            var param = new JoinParam()
+            {
+                userType = SDKUserType.SDK_UT_NORMALUSER,
+                normaluserJoin = joinParam,
+            };
+
+            var sdkErr = mtgService.Join(param);
+            if (sdkErr != SDKError.SDKERR_SUCCESS)
+            {
+                //throw new Exception($"authService.Login failed; rc={sdkErr}");
+                throw new Exception($"mtgService.Join failed; rc={sdkErr}");
+            }
+            */
         }
 
         /*
@@ -240,7 +284,8 @@ namespace ZoomMeetingBotSDK
         }
         */
 
-        public static void Zoom_OnLoginReturnWithReason(LOGINSTATUS ret, IAccountInfo pAccountInfo, LoginFailReason reason)
+        //public static void Zoom_OnLoginReturnWithReason(LOGINSTATUS ret, IAccountInfo pAccountInfo, LoginFailReason reason)
+        public static void Zoom_OnLoginRet(LOGINSTATUS ret, IAccountInfo pAccountInfo, LOGINFAILREASON reason)
         {
             if (pAccountInfo == null)
             {
@@ -251,12 +296,23 @@ namespace ZoomMeetingBotSDK
                 hostApp.Log(LogType.DBG, $"login ret={ret} account={repr(pAccountInfo.GetDisplayName())} type={repr(pAccountInfo.GetLoginType())} reason={reason}");
             }
 
+            /*
             if ((ret == LOGINSTATUS.LOGIN_PROCESSING) || (ret == LOGINSTATUS.LOGIN_IDLE))
             {
                 // todo
             }
             else if (ret == LOGINSTATUS.LOGIN_SUCCESS)
+            */
+            if (ret == LOGINSTATUS.LOGIN_IDLE)
             {
+                hostApp.Log(LogType.DBG, "Getting OAuth Token");
+
+                var oAuthToken = DeserializeJsonToDict(TokenFactory.OAuth.CreateS2SToken(cfg.ZoomOAuthAccountID, cfg.ZoomOAuthClientID, ProtectedString.Unprotect(cfg.ZoomOAuthClientSecret)))["access_token"];
+
+                hostApp.Log(LogType.DBG, "Getting ZAK Token");
+
+                var zakToken = DeserializeJsonToDict(TokenFactory.ZAK.CreateToken(oAuthToken))["token"];
+
                 hostApp.Log(LogType.DBG, "Registering callbacks");
 
                 mtgService = zoom.GetMeetingServiceWrap();
@@ -267,40 +323,40 @@ namespace ZoomMeetingBotSDK
                 waitController = mtgService.GetMeetingWaitingRoomController();
                 chatController = mtgService.GetMeetingChatController();
                 uiController = mtgService.GetUIController();
-
+                
                 // TBD: Implement all controllers, at least for logging events
 
                 RegisterCallBacks();
 
                 hostApp.Log(LogType.DBG, "Starting meeting");
 
-                /*
-                var startParamArgs = new StartParam4WithoutLogin()
-                {
-                    meetingNumber = UInt64.Parse(meetingNumber),
-                    userId = userId,
-                    userZAK = userToken,
-                    userName = userName,
-                    zoomuserType = ZoomUserType.ZoomUserType_APIUSER
-                };
                 var startParam = new StartParam()
                 {
                     userType = SDKUserType.SDK_UT_WITHOUT_LOGIN,
-                    withoutloginStart = startParamArgs
+                    withoutloginStart = new StartParam4WithoutLogin()
+                    {
+                        meetingNumber = UInt64.Parse(cfg.MeetingID),
+                        userID = cfg.ZoomUsername,
+                        userZAK = zakToken,
+                        userName = cfg.MyParticipantName,
+                        zoomuserType = ZoomUserType.ZoomUserType_APIUSER
+                    },
                 };
-                */
 
+                /*
                 var startParamArgs = new StartParam4NormalUser()
                 {
                     meetingNumber = UInt64.Parse(cfg.MeetingID),
+                    customer_key = cfg.ZoomClientSDKSecret,
                     isAudioOff = false,
                     isVideoOff = false,
                 };
                 var startParam = new StartParam()
                 {
                     userType = SDKUserType.SDK_UT_NORMALUSER,
-                    normaluserStart = startParamArgs
+                    normaluserStart = startParamArgs,
                 };
+                */
 
                 var sdkErr = mtgService.Start(startParam);
                 if (sdkErr != SDKError.SDKERR_SUCCESS)
@@ -689,12 +745,14 @@ namespace ZoomMeetingBotSDK
             //UpdateParticipantActiveAudio();
         }
 
-        public static void Zoom_OnSpotlightVideoChangeNotification(bool bSpotlight, uint userid)
+        //public static void Zoom_OnSpotlightVideoChangeNotification(bool bSpotlight, uint userid)
+        public static void Zoom_OnSpotlightVideoChangeNotification(uint[] lstSpotlightedUserID)
         {
-            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} id={userid} spotlight={bSpotlight}");
+            //hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} id={userid} spotlight={bSpotlight}");
+            hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} spotlighted_users={lstSpotlightedUserID}");
         }
 
-        public static void Zoom_OnLockShareStatus(bool bLocked)
+    public static void Zoom_OnLockShareStatus(bool bLocked)
         {
             hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} locked={bLocked}");
         }
@@ -709,10 +767,12 @@ namespace ZoomMeetingBotSDK
             hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} status={repr(status)}");
         }
 
+        /*
         public static void Zoom_OnMeetingSecureKeyNotification(byte[] key, int len, IMeetingExternalSecureKeyHandler pHandler)
         {
             hostApp.Log(LogType.DBG, $"{MethodBase.GetCurrentMethod().Name} len={len} key={repr(key)}");
         }
+        */
 
         public static void Zoom_OnMeetingStatisticsWarningNotification(StatisticsWarningType type)
         {
@@ -748,7 +808,7 @@ namespace ZoomMeetingBotSDK
 
         private static void RegisterCallBacks()
         {
-            mtgService.Add_CB_onMeetingSecureKeyNotification(Zoom_OnMeetingSecureKeyNotification);
+            //mtgService.Add_CB_onMeetingSecureKeyNotification(Zoom_OnMeetingSecureKeyNotification);
             mtgService.Add_CB_onMeetingStatisticsWarningNotification(Zoom_OnMeetingStatisticsWarningNotification);
             mtgService.Add_CB_onMeetingStatusChanged(Zoom_OnMeetingStatusChanged);
             participantController.Add_CB_onHostChangeNotification(Zoom_OnHostChangeNotification);
@@ -784,7 +844,7 @@ namespace ZoomMeetingBotSDK
 
         private static void UnregisterCallBacks()
         {
-            mtgService.Remove_CB_onMeetingSecureKeyNotification(Zoom_OnMeetingSecureKeyNotification);
+            //mtgService.Remove_CB_onMeetingSecureKeyNotification(Zoom_OnMeetingSecureKeyNotification);
             mtgService.Remove_CB_onMeetingStatisticsWarningNotification(Zoom_OnMeetingStatisticsWarningNotification);
             mtgService.Remove_CB_onMeetingStatusChanged(Zoom_OnMeetingStatusChanged);
             participantController.Remove_CB_onHostChangeNotification(Zoom_OnHostChangeNotification);
@@ -822,7 +882,8 @@ namespace ZoomMeetingBotSDK
 
         private static string getJwt()
         {
-            return CreateClientSDKToken(cfg.ZoomClientSDKKey, ProtectedString.Unprotect(cfg.ZoomClientSDKSecret));
+            //return ZoomJWT.CZoomJWT.CreateClientSDKToken(cfg.ZoomClientSDKKey, ProtectedString.Unprotect(cfg.ZoomClientSDKSecret));
+            return TokenFactory.JWT.CreateClientSDKToken(cfg.ZoomClientSDKKey, ProtectedString.Unprotect(cfg.ZoomClientSDKSecret));
         }
 
         private static void BeginLoginSequence()
@@ -850,8 +911,8 @@ namespace ZoomMeetingBotSDK
             hostApp.Log(LogType.DBG, "Authorizing");
             authService = zoom.GetAuthServiceWrap();
             authService.Add_CB_onAuthenticationReturn(Zoom_OnAuthenticationReturn);
-            //authService.Add_CB_onLoginRet(Zoom_OnLoginRet);
-            authService.Add_CB_onLoginReturnWithReason(Zoom_OnLoginReturnWithReason);
+            authService.Add_CB_onLoginRet(Zoom_OnLoginRet);
+            //authService.Add_CB_onLoginReturnWithReason(Zoom_OnLoginReturnWithReason);
             authService.Add_CB_onLogout(Zoom_OnLogout);
 
             /*
@@ -866,6 +927,7 @@ namespace ZoomMeetingBotSDK
             {
                 jwt_token = getJwt(),
             };
+
             sdkErr = authService.SDKAuth(authCtx);
             if (sdkErr != SDKError.SDKERR_SUCCESS)
             {
@@ -1126,6 +1188,8 @@ namespace ZoomMeetingBotSDK
 
                 try
                 {
+                    TokenFactory.Init(cfg.ZoomWebDomain);
+
                     BeginLoginSequence();
 
                     // TBD: There has to be a better way to do this ...
@@ -1253,6 +1317,46 @@ namespace ZoomMeetingBotSDK
         public static void Stop()
         {
             ShouldExit = true;
+        }
+
+        public static bool StartVideo()
+        {
+            try
+            {
+                var sdkErr = videoController.UnmuteVideo();
+                if (sdkErr != SDKError.SDKERR_SUCCESS)
+                {
+                    throw new Exception(sdkErr.ToString());
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                hostApp.Log(LogType.ERR, $"{new StackFrame(1).GetMethod().Name} Failed to start video: {ex}");
+            }
+
+            return false;
+        }
+
+        public static bool StopVideo()
+        {
+            try
+            {
+                var sdkErr = videoController.MuteVideo();
+                if (sdkErr != SDKError.SDKERR_SUCCESS)
+                {
+                    throw new Exception(sdkErr.ToString());
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                hostApp.Log(LogType.ERR, $"{new StackFrame(1).GetMethod().Name} Failed to stop video: {ex}");
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -1389,18 +1493,18 @@ namespace ZoomMeetingBotSDK
                     // CMM 2021.03.29 - BOM - SDK 5.4.54802.0124 - This version added the new function SendChatMsgTo with "type" input
                     // sdkErr = chatController.SendChatTo(to.UserId, text);
 
-                    SDKChatMessageType type;
+                    ChatMessageType type;
                     if (to == SpecialParticipant.everyoneInMeeting)
                     {
-                        type = SDKChatMessageType.SDKChatMessageType_To_All;
+                        type = ChatMessageType.SDKChatMessageType_To_All; // SDKChatMessageType.ChatMessageType_To_All;
                     }
                     else if (to == SpecialParticipant.everyoneInWaitingRoom)
                     {
-                        type = SDKChatMessageType.SDKChatMessageType_To_WaitingRoomUsers;
+                        type = ChatMessageType.SDKChatMessageType_To_WaitingRoomUsers; // SDKChatMessageType.ChatMessageType_To_WaitingRoomUsers;
                     }
                     else
                     {
-                        type = SDKChatMessageType.SDKChatMessageType_To_Individual;
+                        type = ChatMessageType.SDKChatMessageType_To_Individual; // SDKChatMessageType.ChatMessageType_To_Individual;
                     }
 
                     sdkErr = chatController.SendChatMsgTo(text, to.UserId, type);
